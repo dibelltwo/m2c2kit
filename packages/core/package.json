@@ -35,10 +35,10 @@
   },
   "devDependencies": {
     "@m2c2kit/build-helpers": "0.3.27",
-    "@rollup/plugin-commonjs": "28.0.5",
+    "@rollup/plugin-commonjs": "28.0.6",
     "@rollup/plugin-node-resolve": "16.0.1",
     "@rollup/plugin-replace": "6.0.2",
-    "@types/jest": "29.5.14",
+    "@types/jest": "30.0.0",
     "@types/jsdom": "21.1.7",
     "cross-env": "7.0.3",
     "del-cli": "6.0.0",

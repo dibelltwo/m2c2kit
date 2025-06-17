@@ -44,11 +44,11 @@
     "surveyjs-widgets": "1.9.47"
   },
   "devDependencies": {
-    "@rollup/plugin-commonjs": "28.0.5",
+    "@rollup/plugin-commonjs": "28.0.6",
     "@rollup/plugin-node-resolve": "16.0.1",
     "@types/bootstrap-datepicker": "1.10.0",
     "@types/bootstrap-slider": "11.0.6",
-    "@types/jest": "29.5.14",
+    "@types/jest": "30.0.0",
     "@types/jsdom": "21.1.7",
     "@types/react-dom": "18.3.1",
     "@types/react-modal": "3.16.3",
