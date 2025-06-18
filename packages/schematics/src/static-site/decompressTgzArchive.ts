@@ -1,5 +1,6 @@
 import * as tar from "tar-stream";
 import * as zlib from "zlib";
+import { isSafePath } from "./isSafePath";
 
 export interface ExtractedFile {
   /** Filepath as stored in the archive. */
@@ -22,6 +23,10 @@ export async function decompressTgzArchive(
     const files: ExtractedFile[] = [];
 
     extract.on("entry", (header, stream, next) => {
+      if (!isSafePath(header.name)) {
+        stream.resume();
+        return reject(new Error(`invalid filepath: ${header.name}`));
+      }
       const chunks: Buffer[] = [];
       stream.on("data", (chunk) => chunks.push(chunk));
       stream.on("end", () => {
