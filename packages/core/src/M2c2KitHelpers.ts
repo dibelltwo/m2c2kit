@@ -51,6 +51,40 @@ export class M2c2KitHelpers {
   }
 
   /**
+   * Sanitizes parameters object to prevent prototype pollution.
+   *
+   * @param parameters  - parameters object to be sanitized
+   * @returns sanitized parameters or undefined if parameters is undefined
+   */
+  static sanitizeParameters(parameters: unknown | undefined) {
+    if (!parameters) {
+      return undefined;
+    }
+
+    if (typeof parameters !== "object" || Array.isArray(parameters)) {
+      throw new M2Error(
+        "failed to sanitize parameters: parameters must be an object of key-value pairs",
+      );
+    }
+
+    let clonedParameters;
+    try {
+      clonedParameters = JSON.parse(JSON.stringify(parameters));
+    } catch (error) {
+      throw new M2Error(
+        `failed to sanitize parameters. check for circular references. Original error: ${error}`,
+      );
+    }
+
+    return Object.keys(clonedParameters).reduce((sanitized, key) => {
+      if (key !== "__proto__" && key !== "constructor" && key !== "prototype") {
+        sanitized[key] = clonedParameters[key];
+      }
+      return sanitized;
+    }, Object.create(null));
+  }
+
+  /**
    * Converts a value to a JSON schema type or one of types.
    *
    * @remarks The value can be of the target type, or a string that can be

@@ -149,7 +149,9 @@ export class Game implements Activity {
         `Missing or invalid publishUuid in GameOptions. ${providedPublishUuid}To generate a valid UUID, visit a site such as https://www.uuidgenerator.net/version4`,
       );
     }
-    this.options = options;
+    const { parameters, ...optionsWithoutParameters } = options;
+    this.options = optionsWithoutParameters;
+    this.options.parameters = M2c2KitHelpers.sanitizeParameters(parameters);
     this.name = options.name;
     this.id = options.id;
     this.publishUuid = options.publishUuid;
@@ -799,9 +801,11 @@ export class Game implements Activity {
   }
 
   setParameters(additionalParameters: unknown): void {
+    const sanitizedParams =
+      M2c2KitHelpers.sanitizeParameters(additionalParameters);
     const { parameters } = this.options;
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    Object.keys(additionalParameters as any).forEach((key) => {
+    Object.keys(sanitizedParams as any).forEach((key) => {
       /**
        * The parameter "diagnostics" is a special case. It is for setting the
        * diagnostics reporting, and it will not be added to the game's
@@ -818,7 +822,7 @@ export class Game implements Activity {
        */
       if (key === "eruda") {
         const erudaRequested =
-          (additionalParameters as { [key: string]: boolean })[key] === true;
+          (sanitizedParams as { [key: string]: boolean })[key] === true;
         if (erudaRequested) {
           M2c2KitHelpers.loadEruda();
         }
@@ -834,9 +838,9 @@ export class Game implements Activity {
        * JSON.parse().
        */
       if (key === "scripts") {
-        const scriptUrls = (
-          additionalParameters as { [key: string]: string[] }
-        )[key];
+        const scriptUrls = (sanitizedParams as { [key: string]: string[] })[
+          key
+        ];
         if (scriptUrls) {
           M2c2KitHelpers.loadScriptUrls(scriptUrls);
         }
@@ -849,12 +853,12 @@ export class Game implements Activity {
             this.options.name
           } does not have a parameter named ${key}. attempt to set parameter ${key} to value ${
             // eslint-disable-next-line @typescript-eslint/no-explicit-any
-            (additionalParameters as any)[key]
+            (sanitizedParams as any)[key]
           } will be ignored`,
         );
       } else if (this.options.parameters && this.options.parameters[key]) {
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        const providedValue = (additionalParameters as any)[key];
+        const providedValue = (sanitizedParams as any)[key];
         let value;
         if (
           this.options.parameters[key].type !== undefined &&
@@ -882,7 +886,7 @@ export class Game implements Activity {
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
       (this.additionalParameters as { [key: string]: any })[key] =
         // eslint-disable-next-line @typescript-eslint/no-explicit-any
-        (additionalParameters as any)[key];
+        (sanitizedParams as any)[key];
     });
   }
 

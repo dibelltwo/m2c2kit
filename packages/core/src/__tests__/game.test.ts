@@ -163,7 +163,7 @@ describe("parameters", () => {
 
   it("setParameters sets a game parameter", () => {
     g4.setParameters({ number_of_trials: 10 });
-    expect(g4.options?.parameters?.number_of_trials.default).toEqual(10);
+    expect(g4.getParameter("number_of_trials")).toEqual(10);
   });
 
   it("setParameters warns to console when setting non-existent game parameter", () => {
