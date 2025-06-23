@@ -173,7 +173,7 @@ export class EventMaterializer {
         this.freeNodesScene.game = this.game;
         this.freeNodesScene.needsInitialization = true;
 
-        this.game.freeNodesScene = this.freeNodesScene;
+        this.game.sceneManager.freeNodesScene = this.freeNodesScene;
       } else {
         this.game.addScene(node as Scene);
       }
@@ -378,6 +378,6 @@ export class EventMaterializer {
       });
     }
 
-    this.game.presentScene(scenePresentEvent.uuid, transition);
+    this.game.sceneManager.present(scenePresentEvent.uuid, transition);
   }
 }

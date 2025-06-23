@@ -5,7 +5,6 @@ import CanvasKitInit, {
   Canvas,
   Surface,
   Font,
-  Image,
   Paint,
 } from "canvaskit-wasm";
 import { Constants } from "./Constants";
@@ -15,26 +14,13 @@ import { M2Node } from "./M2Node";
 import { M2NodeType } from "./M2NodeType";
 import { RgbaColor } from "./RgbaColor";
 import { Sprite } from "./Sprite";
-import { Action } from "./Action";
-import { M2Image, M2ImageStatus } from "./M2Image";
+import { M2ImageStatus } from "./M2Image";
 import { Scene } from "./Scene";
-import {
-  SceneTransition,
-  Transition,
-  TransitionType,
-  SlideTransition,
-  TransitionDirection,
-} from "./Transition";
+import { Transition } from "./Transition";
 import { GameOptions } from "./GameOptions";
 import { GameData } from "./GameData";
 import { Uuid } from "./Uuid";
-import {
-  M2EventType,
-  M2NodeNewEvent,
-  ScenePresentEvent,
-  I18nDataReadyEvent,
-} from "./M2Event";
-import { PendingScreenshot } from "./PendingScreenshot";
+import { M2EventType, I18nDataReadyEvent } from "./M2Event";
 import { Timer } from "./Timer";
 import { GameParameters } from "./GameParameters";
 import {
@@ -71,11 +57,11 @@ import { GameEvent } from "./GameEvent";
 import { EventStore, EventStoreMode } from "./EventStore";
 import { M2NodeFactory } from "./M2NodeFactory";
 import { EventMaterializer } from "./EventMaterializer";
-import { Easings } from "./Easings";
 import { ActivityKeyValueData } from "./ActivityKeyValueData";
 import { ScoringSchema } from "./ScoringSchema";
 import { M2Error } from "./M2Error";
 import { InputManager } from "./InputManager";
+import { SceneManager } from "./SceneManager";
 
 export interface TrialData {
   [key: string]: string | number | boolean | object | undefined | null;
@@ -102,7 +88,6 @@ export class Game implements Activity {
   options: GameOptions;
   beginTimestamp = NaN;
   beginIso8601Timestamp = "";
-  private inputManager?: InputManager;
   private eventListeners = new Array<ActivityEventListener<ActivityEvent>>();
   private gameMetrics: Array<GameMetric> = new Array<GameMetric>();
   private fpsMetricReportThreshold: number;
@@ -119,6 +104,8 @@ export class Game implements Activity {
   private _fontManager?: FontManager;
   private _imageManager?: ImageManager;
   private _soundManager?: SoundManager;
+  private _inputManager?: InputManager;
+  private _sceneManager?: SceneManager;
   manifest?: Manifest;
   eventStore = new EventStore();
   private nodeFactory = new M2NodeFactory();
@@ -192,26 +179,8 @@ export class Game implements Activity {
         `⚪ ${options.moduleMetadata.name} version ${options.version}`,
       );
     }
-  }
 
-  private createFreeNodesScene() {
-    this.freeNodesScene.game = this;
-    this.freeNodesScene.needsInitialization = true;
-
-    const freeNodeSceneOptions = {
-      name: Constants.FREE_NODES_SCENE_NAME,
-      backgroundColor: [255, 255, 255, 0],
-      uuid: this.freeNodesScene.uuid,
-    };
-    const freeNodesSceneNewEvent: M2NodeNewEvent = {
-      type: M2EventType.NodeNew,
-      target: this.freeNodesScene,
-      nodeType: M2NodeType.Scene,
-      ...M2c2KitHelpers.createFrameUpdateTimestamps(),
-      nodeOptions: freeNodeSceneOptions,
-      sequence: m2c2Globals.eventSequence,
-    };
-    this.eventStore.addEvent(freeNodesSceneNewEvent);
+    this.sceneManager = new SceneManager(this);
   }
 
   /**
@@ -429,7 +398,6 @@ export class Game implements Activity {
     if (this.options.recordEvents === true) {
       this.eventStore.mode = EventStoreMode.Record;
     }
-    this.createFreeNodesScene();
 
     const baseUrls = await this.resolveGameBaseUrls(this);
 
@@ -451,7 +419,7 @@ export class Game implements Activity {
         this.canvasKit = await this.loadCanvasKit(manifestCanvasKitWasmUrl);
       } catch (err) {
         throw new M2Error(
-          `game ${this.id} could not load canvaskit wasm file from ${manifestCanvasKitWasmUrl}`,
+          `game ${this.id} could not load canvaskit wasm file from ${manifestCanvasKitWasmUrl}. err: ${err instanceof Error ? err.message : String(err)}`,
         );
       }
     }
@@ -469,7 +437,7 @@ export class Game implements Activity {
     this.eventMaterializer = new EventMaterializer({
       game: this,
       nodeFactory: this.nodeFactory,
-      freeNodesScene: this.freeNodesScene,
+      freeNodesScene: this.sceneManager.freeNodesScene,
       configureI18n: this.configureI18n.bind(this),
     });
 
@@ -562,6 +530,58 @@ export class Game implements Activity {
   }
   set eventMaterializer(eventMaterializer: EventMaterializer) {
     this._eventMaterializer = eventMaterializer;
+  }
+
+  get inputManager(): InputManager {
+    if (!this._inputManager) {
+      throw new M2Error("inputManager is undefined");
+    }
+    return this._inputManager;
+  }
+
+  set inputManager(inputManager: InputManager) {
+    this._inputManager = inputManager;
+  }
+
+  get sceneManager(): SceneManager {
+    if (!this._sceneManager) {
+      throw new M2Error("sceneManager is undefined");
+    }
+    return this._sceneManager;
+  }
+
+  set sceneManager(sceneManager: SceneManager) {
+    this._sceneManager = sceneManager;
+  }
+
+  /**
+   * Returns the scenes that have been added to the game.
+   */
+  get scenes() {
+    return this.sceneManager.scenes;
+  }
+
+  /**
+   * Returns the current game scene.
+   *
+   * @remarks The current scene is the scene that is currently being
+   * rendered. If no scene has been set as the current scene, this will
+   * return undefined.
+   */
+  get currentScene(): Scene | undefined {
+    return this.sceneManager.currentScene;
+  }
+
+  /**
+   * Returns the game snapshots.
+   *
+   * @remarks Snapshots are the most recent images of the current scene. These
+   * are in raw CanvasKit `Image` format and must be converted to another
+   * format, such as PNG via `CanvasKit.MakeImage()`, before they can be
+   * meaningfully exported.
+   */
+  get snapshots() {
+    return this.sceneManager.snapshots;
   }
 
   /**
@@ -906,9 +926,8 @@ export class Game implements Activity {
   private htmlCanvas?: HTMLCanvasElement;
   surface?: Surface;
   private showFps?: boolean;
-  private bodyBackgroundColor?: RgbaColor;
+  bodyBackgroundColor?: RgbaColor;
 
-  currentScene?: Scene;
   private priorUpdateTime?: number;
   private fpsTextFont?: Font;
   private fpsTextPaint?: Paint;
@@ -923,15 +942,6 @@ export class Game implements Activity {
 
   canvasCssWidth = 0;
   canvasCssHeight = 0;
-
-  scenes = new Array<Scene>();
-  freeNodesScene = new Scene({
-    name: Constants.FREE_NODES_SCENE_NAME,
-    backgroundColor: [255, 255, 255, 0],
-  });
-  private incomingSceneTransitions = new Array<SceneTransition>();
-  private currentSceneSnapshot?: Image;
-  private pendingScreenshot?: PendingScreenshot;
 
   /**
    * Adds a node as a free node (a node that is not part of a scene)
@@ -948,14 +958,14 @@ export class Game implements Activity {
    * @param node - node to add as a free node
    */
   addFreeNode(node: M2Node): void {
-    this.freeNodesScene.addChild(node);
+    this.sceneManager.addFreeNode(node);
   }
 
   /**
    * @deprecated Use addFreeNode() instead
    */
   addFreeEntity(node: M2Node): void {
-    this.addFreeNode(node);
+    this.sceneManager.addFreeNode(node);
   }
 
   /**
@@ -967,42 +977,28 @@ export class Game implements Activity {
    * @param node - the free node to remove or its name as a string
    */
   removeFreeNode(node: M2Node | string): void {
-    if (typeof node === "string") {
-      const child = this.freeNodesScene.children
-        .filter((child) => child.name === node)
-        .find(Boolean);
-      if (!child) {
-        throw new M2Error(
-          `cannot remove free node named "${node}" because it is not currently part of the game's free nodes. `,
-        );
-      }
-      this.freeNodesScene.removeChild(child);
-    } else {
-      this.freeNodesScene.removeChild(node);
-    }
+    this.sceneManager.removeFreeNode(node);
   }
 
   /**
    * @deprecated Use removeFreeNode() instead
    */
   removeFreeEntity(node: M2Node | string): void {
-    this.removeFreeNode(node);
+    this.sceneManager.removeFreeNode(node);
   }
 
   /**
    * Removes all free nodes from the game.
    */
   removeAllFreeNodes(): void {
-    while (this.freeNodesScene.children.length) {
-      this.freeNodesScene.children.pop();
-    }
+    this.sceneManager.removeAllFreeNodes();
   }
 
   /**
    * @deprecated Use removeAllFreeNodes() instead
    */
   removeAllFreeEntities(): void {
-    this.removeAllFreeNodes();
+    this.sceneManager.removeAllFreeNodes();
   }
 
   /**
@@ -1011,14 +1007,14 @@ export class Game implements Activity {
    * @returns array of free nodes
    */
   get freeNodes(): Array<M2Node> {
-    return this.freeNodesScene.children;
+    return this.sceneManager.freeNodes;
   }
 
   /**
    * @deprecated Use Game.freeEntities instead
    */
   get freeEntities(): Array<M2Node> {
-    return this.freeNodes;
+    return this.sceneManager.freeNodes;
   }
 
   /**
@@ -1031,35 +1027,7 @@ export class Game implements Activity {
    * @param scene
    */
   addScene(scene: Scene): void {
-    if (this.scenes.includes(scene)) {
-      console.warn(
-        `Game.addScene(): scene ${scene.toString()} has already been added to the game. This will cause unpredictable behavior. This warning will become an error in a future release.`,
-      );
-    }
-    scene.game = this;
-    scene.needsInitialization = true;
-    this.scenes.push(scene);
-    this.addNodeEvents(scene);
-  }
-
-  /**
-   * Adds events from a node and its children to the game's event store.
-   *
-   * @remarks This method is first called when a scene is added to the game.
-   * If the scene or any of its descendants was constructed or had its
-   * properties changed before it was added to the game, these events were
-   * stored within the node (because the game event store was not yet
-   * available). This method retrieves these events from the node and adds
-   * them to the game's event store.
-   *
-   * @param node - node that contains events to add
-   */
-  private addNodeEvents(node: M2Node): void {
-    this.eventStore.addEvents(node.nodeEvents);
-    node.nodeEvents.length = 0;
-    for (const child of node.children) {
-      this.addNodeEvents(child);
-    }
+    this.sceneManager.add(scene);
   }
 
   /**
@@ -1069,7 +1037,7 @@ export class Game implements Activity {
    */
   addScenes(scenes: Array<Scene>): void {
     scenes.forEach((scene) => {
-      this.addScene(scene);
+      this.sceneManager.add(scene);
     });
   }
 
@@ -1079,23 +1047,7 @@ export class Game implements Activity {
    * @param scene - the scene to remove or its name as a string
    */
   removeScene(scene: Scene | string): void {
-    if (typeof scene === "object") {
-      if (this.scenes.includes(scene)) {
-        this.scenes = this.scenes.filter((s) => s !== scene);
-      } else {
-        throw new M2Error(
-          `cannot remove scene ${scene} from game because the scene is not currently added to the game`,
-        );
-      }
-    } else {
-      if (this.scenes.map((s) => s.name).includes(scene)) {
-        this.scenes = this.scenes.filter((s) => s.name !== scene);
-      } else {
-        throw new M2Error(
-          `cannot remove scene named "${scene}" from game because the scene is not currently added to the game`,
-        );
-      }
-    }
+    this.sceneManager.remove(scene);
   }
 
   /**
@@ -1105,65 +1057,7 @@ export class Game implements Activity {
    * @param transition
    */
   presentScene(scene: string | Scene, transition?: Transition): void {
-    // When we want to present a new scene, we can't immediately switch to the new scene
-    // because we could be in the middle of updating the entire scene and its children hierarchy.
-    // Thus, we have a queue called "incomingSceneTransitions" that has the next scene and its
-    // optional transition animation. We handle the scene transition as the first step of the
-    // game loop, before we update the scene and its children hierarchy.
-    let incomingScene: Scene | undefined;
-    if (typeof scene === "string") {
-      incomingScene = this.scenes
-        .filter((scene_) => scene_.name === scene)
-        .find(Boolean);
-      if (incomingScene === undefined) {
-        incomingScene = this.scenes
-          .filter((scene_) => scene_.uuid === scene)
-          .find(Boolean);
-      }
-      if (incomingScene === undefined) {
-        throw new M2Error(`scene ${scene} not found`);
-      }
-    } else {
-      if (!this.scenes.some((scene_) => scene_ === scene)) {
-        throw new M2Error(
-          `scene ${scene} exists, but it has not been added to the game object`,
-        );
-      }
-      incomingScene = scene;
-    }
-    incomingScene.initialize();
-    incomingScene.needsInitialization = false;
-
-    const sceneTransition = new SceneTransition(
-      incomingScene,
-      transition ?? Transition.none(),
-    );
-    this.incomingSceneTransitions.push(sceneTransition);
-    if (incomingScene.game.bodyBackgroundColor !== undefined) {
-      document.body.style.backgroundColor = `rgb(${incomingScene.game.bodyBackgroundColor[0]},${incomingScene.game.bodyBackgroundColor[1]},${incomingScene.game.bodyBackgroundColor[2]},${incomingScene.game.bodyBackgroundColor[3]})`;
-    } else {
-      document.body.style.backgroundColor = `rgb(${incomingScene.backgroundColor[0]},${incomingScene.backgroundColor[1]},${incomingScene.backgroundColor[2]},${incomingScene.backgroundColor[3]})`;
-    }
-
-    let direction: TransitionDirection | undefined;
-    if (transition?.type === TransitionType.Slide) {
-      direction = (transition as SlideTransition).direction;
-    }
-
-    const scenePresentEvent: ScenePresentEvent = {
-      type: "ScenePresent",
-      target: incomingScene,
-      uuid: incomingScene.uuid,
-      ...M2c2KitHelpers.createFrameUpdateTimestamps(),
-      transitionType: transition?.type ?? TransitionType.None,
-      duration: transition?.duration,
-      direction: direction,
-      easingType: transition?.easing
-        ? Easings.toTypeAsString(transition.easing)
-        : undefined,
-    };
-    this.eventStore.addEvent(scenePresentEvent);
-    return;
+    this.sceneManager.present(scene, transition);
   }
 
   /**
@@ -1282,7 +1176,7 @@ export class Game implements Activity {
       );
     }
 
-    this.presentScene(startingScene);
+    this.sceneManager.present(startingScene);
     if (this.surface === undefined) {
       throw new M2Error("CanvasKit surface is undefined");
     }
@@ -1333,9 +1227,9 @@ export class Game implements Activity {
       this.scenes.forEach((scene) => {
         this.removeScene(scene);
       });
-      this.currentScene = undefined;
+      this.sceneManager.clearCurrentScene();
       this.eventListeners = new Array<ActivityEventListener<ActivityEvent>>();
-      this.freeNodesScene.removeAllChildren();
+      this.sceneManager.freeNodesScene.removeAllChildren();
       this.materializedNodes = [];
       this.eventStore.replay();
       this.setReplayEventsButtonEnabled(false);
@@ -1633,7 +1527,7 @@ export class Game implements Activity {
       canvas.drawText("abc", centerX, centerY, fillColorPaintAntialiased, font);
     }
 
-    const snapshot = this.takeCurrentSceneSnapshot();
+    const snapshot = this.sceneManager.takeCurrentSceneSnapshot();
     canvas.drawImage(snapshot, originX, originY);
     snapshot.delete();
 
@@ -1656,7 +1550,7 @@ export class Game implements Activity {
    * @param canvas - the canvaskit-canvas to draw on
    */
   private warmupShadersWithScenes(canvas: Canvas): void {
-    [...this.scenes, this.freeNodesScene].forEach((scene) => {
+    [...this.scenes, this.sceneManager.freeNodesScene].forEach((scene) => {
       scene.warmup(canvas);
     });
 
@@ -1714,7 +1608,7 @@ export class Game implements Activity {
    * end-user must not call this. FOR INTERNAL USE ONLY.
    */
   dispose(): void {
-    this.inputManager?.dispose();
+    this.inputManager.dispose();
     this.nodes
       .filter((e) => e.isDrawable)
       .forEach((e) => (e as unknown as IDrawable).dispose());
@@ -2766,7 +2660,7 @@ export class Game implements Activity {
     ) {
       if (
         this.currentScene === undefined &&
-        this.incomingSceneTransitions.length === 0 &&
+        this.sceneManager.incomingSceneTransitions.length === 0 &&
         this.eventStore.mode !== EventStoreMode.Replay
       ) {
         throw new M2Error(
@@ -2788,45 +2682,22 @@ export class Game implements Activity {
         }
       }
 
-      this.handleIncomingSceneTransitions(this.incomingSceneTransitions);
+      this.sceneManager.handleIncomingSceneTransitions();
       this.update();
       this.draw(canvas);
-
-      /**
-       * In prior versions, I took a snapshot only when needed, e.g.,
-       * after a new scene transition was requested. From performance testing,
-       * however, I found that taking a snapshot has negligible impact on
-       * performance. It is only encoding the image to bytes, i.e.,
-       * image.encodeToBytes(), that is expensive. Thus, we can take a
-       * snapshot after every draw, in case we'll need the snapshot.
-       *
-       * IMPORTANT: snapshots must be deleted when not needed, otherwise we
-       * will create a massive memory leak because we are creating them
-       * 60 times per second.
-       */
-      while (this.snapshots.length > 0) {
-        this.snapshots.shift()?.delete();
-      }
-      this.snapshots.push(this.takeCurrentSceneSnapshot());
+      this.sceneManager.handleScreenshots();
 
       /**
        * Free nodes should not slide off the screen during transitions.
        * Thus, draw the free nodes AFTER a screen shot may have
        * taken place.
        */
-      this.freeNodesScene.draw(canvas);
-
-      if (this.pendingScreenshot) {
-        this.handlePendingScreenshot(this.pendingScreenshot);
-        this.pendingScreenshot = undefined;
-      }
+      this.sceneManager.freeNodesScene.draw(canvas);
     }
 
     this.priorUpdateTime = m2c2Globals.now;
     this.surface.requestAnimationFrame(this.loop.bind(this));
   }
-
-  snapshots = new Array<Image>();
 
   private updateGameTime(): void {
     if (!this.options.timeStepping) {
@@ -2840,112 +2711,6 @@ export class Game implements Activity {
     } else {
       m2c2Globals.deltaTime = 0;
     }
-  }
-
-  private handleIncomingSceneTransitions(
-    incomingSceneTransitions: Array<SceneTransition>,
-  ): void {
-    if (incomingSceneTransitions.length === 0) {
-      return;
-    }
-    /**
-     * Only begin this scene transition if 1) we have a snapshot of the
-     * current scene, OR 2) the incoming scene has transition type of
-     * None and thus we don't need a snapshot.
-     */
-    if (
-      this.snapshots.length > 0 ||
-      incomingSceneTransitions[0].transition.type === TransitionType.None
-    ) {
-      const incomingSceneTransition = incomingSceneTransitions.shift();
-      if (incomingSceneTransition === undefined) {
-        // should not happen; checked this.incomingSceneTransitions.length > 0
-        throw new M2Error("no incoming scene transition");
-      }
-
-      const incomingScene = incomingSceneTransition.scene;
-      const transition = incomingSceneTransition.transition;
-
-      // no transition (type "none"); just present the incoming scene
-      if (transition.type === TransitionType.None) {
-        if (this.currentScene) {
-          this.currentScene._active = false;
-        }
-        this.currentScene = incomingScene;
-        this.currentScene._active = true;
-        this.raiseSceneEvent(incomingScene, "SceneSetup");
-        this.raiseSceneEvent(incomingScene, "SceneAppear");
-        return;
-      }
-
-      // outgoingScene isn't the current scene; it's a scene that has a
-      // screenshot of the current scene.
-      this.currentSceneSnapshot = this.snapshots.shift();
-      if (!this.currentSceneSnapshot) {
-        throw new M2Error("No snapshot available for outgoing scene");
-      }
-      const outgoingScene = this.createOutgoingScene(this.currentSceneSnapshot);
-      outgoingScene._active = true;
-      if (this.currentScene) {
-        this.currentScene._active = false;
-      }
-      this.currentScene = incomingScene;
-      this.currentScene._active = true;
-      this.raiseSceneEvent(incomingScene, "SceneSetup");
-
-      // animateSceneTransition() will run the transition animation,
-      // mark the outgoing scene as inactive once the animation is done,
-      // and also run the incoming scene's onAppear callback
-      this.animateSceneTransition(incomingScene, transition, outgoingScene);
-    }
-  }
-
-  /**
-   * Creates a scene that has a screen shot of the current scene.
-   *
-   * @param outgoingSceneImage - an image of the current scene
-   * @returns - the scene with the screen shot
-   */
-  private createOutgoingScene(outgoingSceneImage: Image) {
-    const outgoingScene = new Scene({ name: Constants.OUTGOING_SCENE_NAME });
-    // Typically, a scene's width and height are assigned in its
-    // initialize() function during update(). But that approach will not
-    // work for scene transitions because we need the outgoing scene's width
-    // and height for animateSceneTransition(), which will execute before
-    // update(). Therefore, to properly position the incoming scene
-    // animation, we need to assign the outgoing scene's width and height now.
-    outgoingScene.size.width = this.canvasCssWidth;
-    outgoingScene.size.height = this.canvasCssHeight;
-
-    this.addScene(outgoingScene);
-    const image: M2Image = {
-      imageName: Constants.OUTGOING_SCENE_IMAGE_NAME,
-      canvaskitImage: outgoingSceneImage,
-      width: this.canvasCssWidth,
-      height: this.canvasCssHeight,
-      status: M2ImageStatus.Ready,
-      localize: false,
-      isFallback: false,
-    };
-    this.imageManager.addImage(image);
-
-    // if this._rootScale is not 1, that means we scaled down everything
-    // because the display is too small, or we stretched to a larger
-    // display. When that happens, the screen shot that was taken of
-    // the outgoing scene needs to be positioned and re-scaled:
-    // the sprite containing the screen shot is scaled, and the sprite's
-    // position is adjusted.
-    const spr = new Sprite({
-      name: Constants.OUTGOING_SCENE_SPRITE_NAME,
-      imageName: Constants.OUTGOING_SCENE_IMAGE_NAME,
-      position: {
-        x: this.canvasCssWidth / m2c2Globals.rootScale / 2,
-        y: this.canvasCssHeight / m2c2Globals.rootScale / 2,
-      },
-    });
-    spr.scale = 1 / m2c2Globals.rootScale;
-    outgoingScene.addChild(spr);
-    return outgoingScene;
   }
 
   /**
@@ -2982,18 +2747,8 @@ export class Game implements Activity {
    */
   private update(): void {
     this.executeBeforeUpdatePlugins();
-    this.updateScenes();
+    this.sceneManager.updateScenes();
     this.executeAfterUpdatePlugins();
-  }
-
-  /**
-   * Updates all active scenes and their children.
-   */
-  private updateScenes() {
-    this.scenes
-      .filter((scene) => scene._active)
-      .forEach((scene) => scene.update());
-    this.freeNodesScene.update();
   }
 
   /**
@@ -3025,10 +2780,7 @@ export class Game implements Activity {
   }
 
   private draw(canvas: Canvas): void {
-    this.scenes
-      .filter((scene) => scene._active)
-      .forEach((scene) => scene.draw(canvas));
-
+    this.sceneManager.drawScenes(canvas);
     this.drawnFrames++;
     this.calculateFps();
     if (this.showFps) {
@@ -3066,33 +2818,6 @@ export class Game implements Activity {
     }
   }
 
-  private takeCurrentSceneSnapshot(): Image {
-    if (this.surface === undefined) {
-      throw new M2Error("CanvasKit surface is undefined");
-    }
-    return this.surface.makeImageSnapshot();
-  }
-
-  private handlePendingScreenshot(pendingScreenshot: PendingScreenshot) {
-    if (!this.surface) {
-      throw new M2Error("no surface");
-    }
-    let image: Image;
-    if (pendingScreenshot.rect.length == 4) {
-      const sx = pendingScreenshot.rect[0] * m2c2Globals.canvasScale;
-      const sy = pendingScreenshot.rect[1] * m2c2Globals.canvasScale;
-      const sw = pendingScreenshot.rect[2] * m2c2Globals.canvasScale;
-      const sh = pendingScreenshot.rect[3] * m2c2Globals.canvasScale;
-      const scaledRect = [sx, sy, sx + sw, sy + sh];
-      image = this.surface.makeImageSnapshot(scaledRect);
-    } else {
-      image = this.surface.makeImageSnapshot();
-    }
-
-    const imageAsPngBytes = image.encodeToBytes();
-    pendingScreenshot.promiseResolve(imageAsPngBytes);
-  }
-
   /**
    * Takes screenshot of canvas
    *
@@ -3114,249 +2839,7 @@ export class Game implements Activity {
     sw?: number,
     sh?: number,
   ): Promise<Uint8Array | null> {
-    if (!this.surface) {
-      throw new M2Error("no canvaskit surface. unable to take screenshot.");
-    }
-
-    const missingParametersCount = [sx, sy, sw, sh]
-      .map((x) => (x === undefined ? 1 : 0) as number)
-      .reduce((a, b) => a + b);
-
-    return new Promise((resolve, reject) => {
-      switch (missingParametersCount) {
-        case 0: {
-          if (
-            sx === undefined ||
-            sy === undefined ||
-            sw === undefined ||
-            sh === undefined
-          ) {
-            // should never get here because this case is 0 missing parameters
-            reject("missing values in arguments for takeScreenshot()");
-            return;
-          }
-          this.pendingScreenshot = {
-            rect: [sx, sy, sw, sh],
-            promiseResolve: resolve,
-          };
-          break;
-        }
-        case 4: {
-          this.pendingScreenshot = {
-            rect: [],
-            promiseResolve: resolve,
-          };
-          break;
-        }
-        default: {
-          reject(
-            "Exactly 0 or 4 arguments must be supplied to takeScreenshot()",
-          );
-        }
-      }
-    });
-  }
-
-  private animateSceneTransition(
-    incomingScene: Scene,
-    transition: Transition,
-    outgoingScene: Scene,
-  ): void {
-    // animateSceneTransition will be called as the first step of the game loop, for reasons described above
-    // in presentScene()
-    const duration = transition.duration;
-    // we set each scene as transitioning because we don't want to start any actions on the incoming
-    // scene children until the scene is done transitioning.
-    incomingScene._transitioning = true;
-    outgoingScene._transitioning = true;
-
-    switch (transition.type) {
-      case TransitionType.Slide: {
-        const direction = (transition as SlideTransition).direction;
-        switch (direction) {
-          case TransitionDirection.Left:
-            incomingScene.position.x = incomingScene.size.width;
-            // Because these actions are part of the scene transition, it's important to set optional parameter
-            // runDuringTransition to "true" for the Move and Custom actions.
-            // These transitions actions will move the screens and then set the scene's transitioning property
-            // to false. It's important to set the transitioning property to false because then the regular,
-            // non-transition actions previously set on the scene will then begin.
-            // Also, very important to execute currentSceneSnapshot.delete() to prevent memory leaks
-            incomingScene.run(
-              Action.sequence([
-                Action.move({
-                  point: { x: 0, y: 0 },
-                  duration: duration,
-                  easing: transition.easing,
-                  runDuringTransition: true,
-                }),
-                Action.custom({
-                  callback: () => {
-                    incomingScene._transitioning = false;
-                    this.raiseSceneEvent(incomingScene, "SceneAppear");
-                    /**
-                     * For the transitions, the outgoing scene is a temporary scene
-                     * that has a screenshot of the previous scene. Thus it is
-                     * ok to remove because it will never be used again.
-                     */
-                    this.removeScene(Constants.OUTGOING_SCENE_NAME);
-                  },
-                  runDuringTransition: true,
-                }),
-              ]),
-            );
-            outgoingScene.run(
-              Action.sequence([
-                Action.move({
-                  point: { x: -outgoingScene.size.width, y: 0 },
-                  duration: duration,
-                  easing: transition.easing,
-                  runDuringTransition: true,
-                }),
-                Action.custom({
-                  callback: () => {
-                    outgoingScene._active = false;
-                    outgoingScene._transitioning = false;
-                    if (this.currentSceneSnapshot) {
-                      this.currentSceneSnapshot.delete();
-                    }
-                  },
-                  runDuringTransition: true,
-                }),
-              ]),
-            );
-            break;
-          case TransitionDirection.Right:
-            incomingScene.position.x = -incomingScene.size.width;
-            incomingScene.run(
-              Action.sequence([
-                Action.move({
-                  point: { x: 0, y: 0 },
-                  duration: duration,
-                  easing: transition.easing,
-                  runDuringTransition: true,
-                }),
-                Action.custom({
-                  callback: () => {
-                    incomingScene._transitioning = false;
-                    this.raiseSceneEvent(incomingScene, "SceneAppear");
-                    this.removeScene(Constants.OUTGOING_SCENE_NAME);
-                  },
-                  runDuringTransition: true,
-                }),
-              ]),
-            );
-            outgoingScene.run(
-              Action.sequence([
-                Action.move({
-                  point: { x: outgoingScene.size.width, y: 0 },
-                  duration: duration,
-                  easing: transition.easing,
-                  runDuringTransition: true,
-                }),
-                Action.custom({
-                  callback: () => {
-                    outgoingScene._active = false;
-                    outgoingScene._transitioning = false;
-                    if (this.currentSceneSnapshot) {
-                      this.currentSceneSnapshot.delete();
-                    }
-                  },
-                  runDuringTransition: true,
-                }),
-              ]),
-            );
-            break;
-          case TransitionDirection.Up:
-            incomingScene.position.y = incomingScene.size.height;
-            incomingScene.run(
-              Action.sequence([
-                Action.move({
-                  point: { x: 0, y: 0 },
-                  duration: duration,
-                  easing: transition.easing,
-                  runDuringTransition: true,
-                }),
-                Action.custom({
-                  callback: () => {
-                    incomingScene._transitioning = false;
-                    this.raiseSceneEvent(incomingScene, "SceneAppear");
-                    this.removeScene(Constants.OUTGOING_SCENE_NAME);
-                  },
-                  runDuringTransition: true,
-                }),
-              ]),
-            );
-            outgoingScene.run(
-              Action.sequence([
-                Action.move({
-                  point: { x: 0, y: -outgoingScene.size.height },
-                  duration: duration,
-                  easing: transition.easing,
-                  runDuringTransition: true,
-                }),
-                Action.custom({
-                  callback: () => {
-                    outgoingScene._active = false;
-                    outgoingScene._transitioning = false;
-                    if (this.currentSceneSnapshot) {
-                      this.currentSceneSnapshot.delete();
-                    }
-                  },
-                  runDuringTransition: true,
-                }),
-              ]),
-            );
-            break;
-          case TransitionDirection.Down:
-            incomingScene.position.y = -incomingScene.size.height;
-            incomingScene.run(
-              Action.sequence([
-                Action.move({
-                  point: { x: 0, y: 0 },
-                  duration: duration,
-                  easing: transition.easing,
-                  runDuringTransition: true,
-                }),
-                Action.custom({
-                  callback: () => {
-                    incomingScene._transitioning = false;
-                    this.raiseSceneEvent(incomingScene, "SceneAppear");
-                    this.removeScene(Constants.OUTGOING_SCENE_NAME);
-                  },
-                  runDuringTransition: true,
-                }),
-              ]),
-            );
-            outgoingScene.run(
-              Action.sequence([
-                Action.move({
-                  point: { x: 0, y: outgoingScene.size.height },
-                  duration: duration,
-                  easing: transition.easing,
-                  runDuringTransition: true,
-                }),
-                Action.custom({
-                  callback: () => {
-                    outgoingScene._active = false;
-                    outgoingScene._transitioning = false;
-                    if (this.currentSceneSnapshot) {
-                      this.currentSceneSnapshot.delete();
-                    }
-                  },
-                  runDuringTransition: true,
-                }),
-              ]),
-            );
-            break;
-          default:
-            throw new M2Error("unknown transition direction");
-        }
-        break;
-      }
-      default:
-        throw new M2Error("unknown transition type");
-    }
+    return this.sceneManager.takeScreenshot(sx, sy, sw, sh);
   }
 
   private drawFps(canvas: Canvas): void {
@@ -3423,7 +2906,7 @@ export class Game implements Activity {
     }
 
     const nodes = new Array<M2Node>();
-    [...this.scenes, this.freeNodesScene].forEach((scene) =>
+    [...this.scenes, this.sceneManager.freeNodesScene].forEach((scene) =>
       getChildNodesRecursive(scene, nodes),
     );
     return nodes;
@@ -3434,20 +2917,6 @@ export class Game implements Activity {
    */
   get entities(): Array<M2Node> {
     return this.nodes;
-  }
-
-  private raiseSceneEvent(
-    scene: Scene,
-    eventType: "SceneSetup" | "SceneAppear",
-  ): void {
-    const event: M2NodeEvent = {
-      target: scene,
-      type: eventType,
-      ...M2c2KitHelpers.createFrameUpdateTimestamps(),
-    };
-    scene.eventListeners
-      .filter((listener) => listener.type === eventType)
-      .forEach((listener) => listener.callback(event));
   }
 
   /**

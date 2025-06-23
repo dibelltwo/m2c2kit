@@ -138,7 +138,7 @@ export class InputManager {
      * nodeEvent.handled to true so it does not propagate to the current scene.
      */
     this.processDomPointerDown(
-      this.game.freeNodesScene,
+      this.game.sceneManager.freeNodesScene,
       nodeEvent,
       domPointerEvent,
     );
@@ -158,7 +158,7 @@ export class InputManager {
       ...M2c2KitHelpers.createTimestamps(),
     };
     this.processDomPointerUp(
-      this.game.freeNodesScene,
+      this.game.sceneManager.freeNodesScene,
       nodeEvent,
       domPointerEvent,
     );
@@ -178,7 +178,7 @@ export class InputManager {
       ...M2c2KitHelpers.createTimestamps(),
     };
     this.processDomPointerMove(
-      this.game.freeNodesScene,
+      this.game.sceneManager.freeNodesScene,
       nodeEvent,
       domPointerEvent,
     );
@@ -202,7 +202,7 @@ export class InputManager {
       ...M2c2KitHelpers.createTimestamps(),
     };
     this.processDomPointerLeave(
-      this.game.freeNodesScene,
+      this.game.sceneManager.freeNodesScene,
       nodeEvent,
       domPointerEvent,
     );
@@ -226,7 +226,7 @@ export class InputManager {
       ...M2c2KitHelpers.createTimestamps(),
     };
     this.raiseEventOnListeningNodes<M2KeyboardEvent>(
-      this.game.freeNodesScene,
+      this.game.sceneManager.freeNodesScene,
       nodeEvent,
       domKeyboardEvent,
     );
@@ -249,7 +249,7 @@ export class InputManager {
       ...M2c2KitHelpers.createTimestamps(),
     };
     this.raiseEventOnListeningNodes<M2KeyboardEvent>(
-      this.game.freeNodesScene,
+      this.game.sceneManager.freeNodesScene,
       nodeEvent,
       domKeyboardEvent,
     );
