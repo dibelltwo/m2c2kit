@@ -45,4 +45,72 @@ export class WebGlInfo {
       rendererInfoCanvas.remove();
     }
   }
+
+  public static interceptWebGlCalls(htmlCanvas: HTMLCanvasElement) {
+    const canvasProto = Object.getPrototypeOf(htmlCanvas);
+
+    if (canvasProto.m2c2ModifiedGetContext) {
+      canvasProto.m2c2ModifiedGetContext = true;
+      const getContextOriginal = canvasProto.getContext;
+      canvasProto.getContext = function (...args: unknown[]) {
+        // eslint-disable-next-line @typescript-eslint/no-explicit-any
+        if ((window as any).logWebGl) {
+          console.log(
+            `🔼 getContext(${args.map((a) => String(a)).join(", ")})`,
+          );
+        }
+        const context = getContextOriginal.apply(this, [...args]);
+        const contextProto = Object.getPrototypeOf(context);
+
+        // if (context.__proto__.createProgram) {
+        //   if (!context.__proto__.m2c2ModifiedCreateProgram) {
+        //     context.__proto__.m2c2ModifiedCreateProgram = true;
+        //     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //     // @ts-ignore
+        //     const createProgramOriginal = context.__proto__.createProgram;
+        //     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //     // @ts-ignore
+        //     context.__proto__.createProgram = function (...args) {
+        //       console.log("🔼 createProgram()");
+        //       return createProgramOriginal.apply(this, [...args]);
+        //     };
+        //   }
+        // }
+
+        // if (context.__proto__.shaderSource) {
+        //   if (!context.__proto__.m2c2ModifiedShaderSource) {
+        //     context.__proto__.m2c2ModifiedShaderSource = true;
+        //     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //     // @ts-ignore
+        //     const shaderSourceOriginal = context.__proto__.shaderSource
+        //     // eslint-disable-next-line @typescript-eslint/ban-ts-comment
+        //     // @ts-ignore
+        //     context.__proto__.shaderSource= function (...args) {
+        //       console.log(`🔼 shaderSource(): ${args[1]}`);
+        //       return shaderSourceOriginal.apply(this, [...args]);
+        //     };
+        //   }
+        // }
+
+        if (contextProto.compileShader) {
+          if (!contextProto.m2c2ModifiedCompileShader) {
+            contextProto.m2c2ModifiedCompileShader = true;
+            const compileShaderOriginal = contextProto.compileShader;
+            contextProto.compileShader = function (...args: unknown[]) {
+              // eslint-disable-next-line @typescript-eslint/no-explicit-any
+              if ((window as any).logWebGl) {
+                const shader = args[0];
+                const source = context.getShaderSource(shader);
+                console.log(`🔼 compileShader():`);
+                console.log(source);
+              }
+              return compileShaderOriginal.apply(this, [...args]);
+            };
+          }
+        }
+
+        return context;
+      };
+    }
+  }
 }

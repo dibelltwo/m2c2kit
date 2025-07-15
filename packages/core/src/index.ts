@@ -94,6 +94,7 @@ export * from "./StoryOptions";
 export * from "./BrowserImage";
 export * from "./M2NodeEventListener";
 export * from "./TapEvent";
+export * from "./TrialData";
 export * from "./TrialSchema";
 export * from "./TextLine";
 export * from "./TextLineOptions";

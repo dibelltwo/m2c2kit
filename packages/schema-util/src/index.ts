@@ -2,7 +2,7 @@
 
 import yargs from "yargs";
 import { hideBin } from "yargs/helpers";
-import { SyntaxKind, Project } from "ts-morph";
+import { SyntaxKind, Project, ClassDeclaration } from "ts-morph";
 import { stringify, Input } from "csv-stringify/sync";
 import { M2c2Schema } from "./schemas.js";
 import path from "path";
@@ -70,15 +70,9 @@ yargs(hideBin(process.argv))
             );
             process.exit(1);
           }
-          let automaticTrialSchema: object;
-          if (!argv["game-class"]) {
-            automaticTrialSchema = getAutomaticSchemaFromCorePackage("Trial");
-          } else {
-            automaticTrialSchema = getAutomaticSchemaFromSourceFile(
-              argv["game-class"].toString(),
-              "Trial",
-            );
-          }
+          const automaticTrialSchema =
+            getAutomaticSchemaFromCorePackage("Trial");
+
           trialSchema = { ...automaticTrialSchema, ...trialSchema };
         }
         if (
@@ -87,16 +81,9 @@ yargs(hideBin(process.argv))
         ) {
           scoringSchema = getSchemaFromSourceFile(f, "ScoringSchema");
           if (scoringSchema) {
-            let automaticScoringSchema: object;
-            if (!argv["game-class"]) {
-              automaticScoringSchema =
-                getAutomaticSchemaFromCorePackage("Scoring");
-            } else {
-              automaticScoringSchema = getAutomaticSchemaFromSourceFile(
-                argv["game-class"].toString(),
-                "Scoring",
-              );
-            }
+            const automaticScoringSchema =
+              getAutomaticSchemaFromCorePackage("Scoring");
+
             scoringSchema = { ...automaticScoringSchema, ...scoringSchema };
           } else {
             // no ScoringSchema is not a fatal error, because not all assessments
@@ -259,11 +246,6 @@ yargs(hideBin(process.argv))
     description: "comma-delimited list of assessment sources",
     demandOption: true,
   })
-  .option("game-class", {
-    type: "string",
-    description:
-      "Game.ts assessment source. Used for --schema=TrialSchema and --schema=all. If it is not provided, the @m2c2kit/core JavaScript bundle will automatically be located and used",
-  })
   .option("format", {
     type: "string",
     default: "csv",
@@ -292,84 +274,77 @@ function getAutomaticSchemaFromCorePackage(
   const coreBundle = findupSync("node_modules/@m2c2kit/core/dist/index.js");
   if (!coreBundle) {
     process.stderr.write(
-      "Could not resolve @m2c2kit/core package. This is required if --game-class is omitted.",
+      "Could not resolve @m2c2kit/core package. This is required.",
     );
     process.exit(1);
   }
 
   const project = new Project();
   const file = project.addSourceFileAtPath(coreBundle);
+  // Originally, both automatic schemas were in the Game class, but they moved
+  // to the DataManager class. Check both classes, for backwards compatibility.
   const gameClass = file
     .getClasses()
     .filter((c) => c.getName() === "Game")
     .find(Boolean);
-  if (!gameClass) {
-    process.stderr.write(`No Game class found in ${coreBundle}` + EOL);
+  if (gameClass) {
+    const result = extractSchemaFromClass(gameClass, propertyName);
+    if (result.schema !== undefined) {
+      return result.schema;
+    }
+  }
+
+  const dataManagerClass = file
+    .getClasses()
+    .filter((c) => c.getName() === "DataManager")
+    .find(Boolean);
+
+  if (!dataManagerClass) {
+    process.stderr.write(
+      `No schemas found in Game or DataManager class in ${coreBundle}` + EOL,
+    );
     process.exit(1);
   }
 
-  const binaryExpression = gameClass
+  const result = extractSchemaFromClass(dataManagerClass, propertyName);
+  if (result.schema !== undefined) {
+    return result.schema;
+  }
+  process.stderr.write(result.error + coreBundle + EOL);
+  process.exit(1);
+}
+
+interface ExtractionResult {
+  schema?: object;
+  error?: string;
+}
+
+function extractSchemaFromClass(
+  classDeclaration: ClassDeclaration,
+  propertyName: string,
+): ExtractionResult {
+  const binaryExpression = classDeclaration
     .getDescendantsOfKind(SyntaxKind.BinaryExpression)
     .filter((d) => d.getLeft().getText() === `this.${propertyName}`)
     .find(Boolean);
   if (!binaryExpression) {
-    process.stderr.write(
-      `No ${propertyName} property found in file ${coreBundle}`,
-    );
-    process.exit(1);
+    return {
+      error: "No ${propertyName} property found in file ",
+    };
   }
 
   const rightExpression = binaryExpression.getRight();
   if (rightExpression.getKind() === SyntaxKind.ObjectLiteralExpression) {
     const schemaString = rightExpression.getText();
     const schema = eval("(" + schemaString + ")");
-    return schema as object;
+    return {
+      schema: schema,
+    };
   }
 
-  process.stderr.write(
-    `Could not get ${propertyName} from file ${coreBundle}` + EOL,
-  );
-  process.exit(1);
-}
-
-/**
- * Gets automatic schema from a source file
- *
- * @param sourceFile - Path to the Game.ts source file
- * @param schemaType - The type of schema to retrieve: `Trial` or `Scoring`.
- * `GameParameters` do not have automatic schema.
- * @returns The schema object
- */
-function getAutomaticSchemaFromSourceFile(
-  sourceFile: string,
-  schemaType: "Trial" | "Scoring",
-): object {
-  const propertyName = `automatic${schemaType}Schema`;
-  const project = new Project();
-  const file = project.addSourceFileAtPath(sourceFile);
-  const gameClass = file
-    .getClasses()
-    .filter((c) => c.getName() === "Game")
-    .find(Boolean);
-  if (!gameClass) {
-    process.stderr.write(`No Game class found in ${sourceFile}` + EOL);
-    process.exit(1);
-  }
-  const schemaDeclaration = gameClass
-    .getChildrenOfKind(SyntaxKind.PropertyDeclaration)
-    .filter((d) => d.getName() === propertyName)
-    .find(Boolean);
-  if (!schemaDeclaration) {
-    process.stderr.write(
-      `No ${propertyName} property found in Game class at ${sourceFile}`,
-    );
-    process.exit(1);
-  }
-  const schemaString = schemaDeclaration
-    .getInitializerIfKindOrThrow(SyntaxKind.ObjectLiteralExpression)
-    .getText();
-  const schema = eval("(" + schemaString + ")");
-  return schema as object;
+  return {
+    error: `Could not get ${propertyName} from file `,
+  };
 }
 
 /**
