@@ -2,7 +2,7 @@
 /**
  * The code in this file is adapted from a reference CLI implementation from
  * the Angular devkit repository:
- *   https://github.com/angular/angular-cli/blob/cccd35e6f31906870e0761136884cb715c9afca8/packages/angular_devkit/schematics_cli/bin/schematics.ts
+ *   https://github.com/angular/angular-cli/blob/37589b6d88e6db1e654192a996ab599d3ed98e27/packages/angular_devkit/schematics_cli/bin/schematics.ts
  * The license for that code is as follows:
  * @license
  * Copyright Google LLC All Rights Reserved.
@@ -321,12 +321,14 @@ export async function main({
         break;
       case "update":
         loggingQueue.push(
-          `${colors.cyan("UPDATE")} ${eventPath} (${event.content.length} bytes)`,
+          // TODO: `as unknown` was necessary during TS 5.9 update. Figure out a long-term solution.
+          `${colors.cyan("UPDATE")} ${eventPath} (${(event.content.length as unknown as Buffer).length} bytes)`,
         );
         break;
       case "create":
         loggingQueue.push(
-          `${colors.green("CREATE")} ${eventPath} (${event.content.length} bytes)`,
+          // TODO: `as unknown` was necessary during TS 5.9 update. Figure out a long-term solution.
+          `${colors.green("CREATE")} ${eventPath} (${(event.content as unknown as Buffer).length} bytes)`,
         );
         break;
       case "delete":

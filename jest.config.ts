@@ -1,5 +1,5 @@
 import type { JestConfigWithTsJest } from "ts-jest";
-import { jsWithTsESM } from "ts-jest/presets";
+import { jsWithTsESM } from "ts-jest/presets/index.js";
 
 const jestConfig: JestConfigWithTsJest = {
   extensionsToTreatAsEsm: [".ts"],

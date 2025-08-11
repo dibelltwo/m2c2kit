@@ -28,17 +28,17 @@
   },
   "homepage": "https://m2c2-project.github.io/m2c2kit",
   "dependencies": {
-    "@angular-devkit/core": "^20.1.0",
-    "@angular-devkit/schematics": "^20.1.0",
-    "@schematics/angular": "^20.1.0",
+    "@angular-devkit/core": "^20.1.5",
+    "@angular-devkit/schematics": "^20.1.5",
+    "@schematics/angular": "^20.1.5",
     "archiver": "7.0.1",
-    "es-module-shims": "2.6.1",
+    "es-module-shims": "2.6.2",
     "findup-sync": "5.0.0",
     "js-beautify": "1.15.4",
     "tar-stream": "3.1.7"
   },
   "devDependencies": {
-    "@angular-devkit/schematics-cli": "^20.1.0",
+    "@angular-devkit/schematics-cli": "^20.1.5",
     "@m2c2kit/core": "0.3.32",
     "@m2c2kit/session": "0.3.14",
     "@types/archiver": "6.0.3",
@@ -47,7 +47,7 @@
     "@types/tar-stream": "3.1.4",
     "jasmine": "^4.0.0",
     "semver": "7.7.2",
-    "typescript": "5.8.3"
+    "typescript": "5.9.2"
   },
   "engines": {
     "node": ">=18"

@@ -12,8 +12,8 @@
   ],
   "devDependencies": {
     "@types/findup-sync": "4.0.5",
-    "@types/node": "22.16.4",
-    "esbuild": "0.25.6"
+    "@types/node": "22.17.1",
+    "esbuild": "0.25.8"
   },
   "scripts": {
     "build": "node esbuild.mjs",
@@ -31,7 +31,7 @@
   },
   "homepage": "https://m2c2-project.github.io/m2c2kit",
   "dependencies": {
-    "csv": "6.4.0",
+    "csv": "6.4.1",
     "findup-sync": "5.0.0",
     "ts-morph": "26.0.0",
     "yargs": "18.0.0"

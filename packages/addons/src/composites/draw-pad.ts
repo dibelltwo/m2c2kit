@@ -836,7 +836,7 @@ export class DrawPad extends Composite {
     return currentPoint;
   }
 
-  private arrayBufferToBase64String(buffer: ArrayBuffer): string {
+  private arrayBufferToBase64String(buffer: ArrayBuffer | Uint8Array): string {
     let binary = "";
     const bytes = new Uint8Array(buffer);
     for (let i = 0; i < bytes.byteLength; i++) {
