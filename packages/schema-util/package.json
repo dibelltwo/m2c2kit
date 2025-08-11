@@ -33,6 +33,7 @@
   "dependencies": {
     "csv": "6.4.1",
     "findup-sync": "5.0.0",
+    "json5": "2.2.3",
     "ts-morph": "26.0.0",
     "yargs": "18.0.0"
   },

@@ -11,6 +11,7 @@ import "process";
 import { EOL } from "os";
 import child_process from "child_process";
 import findupSync from "findup-sync";
+import JSON5 from "json5";
 
 let shortCommitHash: string;
 try {
@@ -336,7 +337,7 @@ function extractSchemaFromClass(
   const rightExpression = binaryExpression.getRight();
   if (rightExpression.getKind() === SyntaxKind.ObjectLiteralExpression) {
     const schemaString = rightExpression.getText();
-    const schema = eval("(" + schemaString + ")");
+    const schema = JSON5.parse(schemaString);
     return {
       schema: schema,
     };
@@ -382,7 +383,7 @@ function getSchemaFromSourceFile(
   const schemaString = declaration
     .getInitializerIfKindOrThrow(SyntaxKind.ObjectLiteralExpression)
     .getText();
-  const schema = eval("(" + schemaString + ")");
+  const schema = JSON5.parse(schemaString);
   return schema;
 }
 
