@@ -42,6 +42,12 @@ yargs(hideBin(process.argv))
       let jsonSchema = {};
 
       filePaths.forEach((f) => {
+        if (!f.toLowerCase().endsWith(".ts")) {
+          process.stderr.write(
+            `File ${f} is not a TypeScript file ending in .ts` + EOL,
+          );
+          process.exit(1);
+        }
         if (!fs.existsSync(f)) {
           process.stderr.write(`File ${f} does not exist` + EOL);
           process.exit(1);
@@ -423,18 +429,56 @@ function getAssessmentNameFromSourceFile(sourceFile: string): string {
   return match.groups.name;
 }
 
+/**
+ * Gets the version of the assessment from its `package.json` file.
+ *
+ * @remarks It assumes that the `package.json` file is located in the parent
+ * directory above the source file directory. m2c2kit assessment convention is
+ * to have source files in a `src` directory, and the `package.json` is in the
+ * parent directory of that `src` directory.
+ *
+ * @param sourceFile - Path to the TypeScript source file
+ * @returns The version of the assessment from its `package.json` file
+ * @throws Will exit the process if the package.json file is missing, invalid, or escapes the parent directory.
+ */
 function getAssessmentVersion(sourceFile: string): string {
-  const packageJsonPath = path.resolve(
-    path.dirname(sourceFile),
-    "..",
-    "package.json",
-  );
-  if (!fs.existsSync(packageJsonPath)) {
+  const parentDir = path.resolve(path.dirname(sourceFile), "..");
+  const packageJsonPath = path.join(parentDir, "package.json");
+  const resolvedPackageJson = path.resolve(packageJsonPath);
+  const relative = path.relative(parentDir, resolvedPackageJson);
+
+  if (relative.startsWith("..")) {
     process.stderr.write(
-      `Could not find assessment package.json at ${packageJsonPath}` + EOL,
+      `Invalid path: ${resolvedPackageJson} escapes parent directory` + EOL,
     );
     process.exit(1);
   }
-  const packageJson = JSON.parse(fs.readFileSync(packageJsonPath, "utf-8"));
-  return packageJson.version;
+
+  if (!fs.existsSync(resolvedPackageJson)) {
+    process.stderr.write(
+      `Could not find assessment package.json at ${resolvedPackageJson}` + EOL,
+    );
+    process.exit(1);
+  }
+
+  try {
+    const packageJson = JSON.parse(
+      fs.readFileSync(resolvedPackageJson, "utf-8"),
+    );
+    if (typeof packageJson.version === "string") {
+      return packageJson.version;
+    } else {
+      process.stderr.write(
+        `Invalid package.json: missing 'version' field at ${resolvedPackageJson}` +
+          EOL,
+      );
+      process.exit(1);
+    }
+  } catch (err) {
+    process.stderr.write(
+      `Error reading or parsing package.json at ${resolvedPackageJson}: ${err}` +
+        EOL,
+    );
+    process.exit(1);
+  }
 }

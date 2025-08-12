@@ -141,6 +141,27 @@ function deleteDirectory(tree: Tree, dirPath: string) {
   tree.delete(dirPath);
 }
 
+/**
+ * Checks if a path resolves to a directory or subdirectory.
+ * Prevents path traversal vulnerabilities.
+ *
+ * @param inputPath - The path to check.
+ * @param baseDir - The base directory.
+ * @return true if `inputPath` is within `baseDir`, false otherwise.
+ */
+function isPathWithinDirectory(inputPath: string, baseDir: string): boolean {
+  const resolvedBaseDir = path.resolve(baseDir);
+  const resolvedInput = path.resolve(baseDir, inputPath);
+
+  // Allow if the paths are identical
+  if (resolvedInput === resolvedBaseDir) {
+    return true;
+  }
+
+  // Allow if input is a subdirectory of baseDir (with separator for strictness)
+  return resolvedInput.startsWith(resolvedBaseDir + "/");
+}
+
 export function staticSite(options: m2StaticSiteOptions): Rule {
   return async (tree: Tree) => {
     const cwd = process.cwd().replace(/\\/g, "/");
@@ -603,6 +624,11 @@ export function staticSite(options: m2StaticSiteOptions): Rule {
           );
         } else {
           // read file
+          if (!isPathWithinDirectory(assessmentConfiguration.setup, cwd)) {
+            throw new Error(
+              `Setup file path ${assessmentConfiguration.setup} is outside the current working directory ${cwd}. This is not allowed for security reasons.`,
+            );
+          }
           setupCode = fs.readFileSync(assessmentConfiguration.setup, "utf8");
         }
       }
@@ -615,6 +641,11 @@ export function staticSite(options: m2StaticSiteOptions): Rule {
           );
         } else {
           // read file
+          if (!isPathWithinDirectory(assessmentConfiguration.configure, cwd)) {
+            throw new Error(
+              `Configure file path ${assessmentConfiguration.configure} is outside the current working directory ${cwd}. This is not allowed for security reasons.`,
+            );
+          }
           configureCode = fs.readFileSync(
             assessmentConfiguration.configure,
             "utf8",
@@ -632,6 +663,11 @@ export function staticSite(options: m2StaticSiteOptions): Rule {
           );
         } else {
           // read file
+          if (!isPathWithinDirectory(assessmentConfiguration.entry, cwd)) {
+            throw new Error(
+              `Entry file path ${assessmentConfiguration.entry} is outside the current working directory ${cwd}. This is not allowed for security reasons.`,
+            );
+          }
           entryCode = fs.readFileSync(assessmentConfiguration.entry, "utf8");
         }
 
