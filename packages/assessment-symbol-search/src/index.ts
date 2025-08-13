@@ -89,7 +89,7 @@ positions.",
           "Duration, in milliseconds, of the slide in animation after the countdown phase.",
       },
       number_of_trials: {
-        default: 5,
+        default: 20,
         type: "integer",
         description: "How many trials to run.",
       },

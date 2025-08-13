@@ -103,12 +103,12 @@ class ColorShapes extends Game {
         type: "integer",
       },
       number_of_different_colors_trials: {
-        default: 2,
+        default: 6,
         type: "integer",
         description: "Number of trials where the shapes have different colors.",
       },
       number_of_trials: {
-        default: 4,
+        default: 12,
         description: "How many trials to run.",
         type: "integer",
       },
