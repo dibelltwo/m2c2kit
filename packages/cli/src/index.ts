@@ -322,7 +322,7 @@ export async function main({
       case "update":
         loggingQueue.push(
           // TODO: `as unknown` was necessary during TS 5.9 update. Figure out a long-term solution.
-          `${colors.cyan("UPDATE")} ${eventPath} (${(event.content.length as unknown as Buffer).length} bytes)`,
+          `${colors.cyan("UPDATE")} ${eventPath} (${(event.content as unknown as Buffer).length} bytes)`,
         );
         break;
       case "create":
