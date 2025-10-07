@@ -19,13 +19,13 @@
     "@m2c2kit/session": "^0.3.12"
   },
   "devDependencies": {
-    "@rollup/plugin-node-resolve": "16.0.1",
+    "@rollup/plugin-node-resolve": "16.0.2",
     "rimraf": "6.0.1",
-    "rollup": "4.46.4",
+    "rollup": "4.52.4",
     "rollup-plugin-copy": "3.5.0",
     "rollup-plugin-dts": "6.2.3",
     "rollup-plugin-esbuild": "6.2.1",
-    "typescript": "5.9.2"
+    "typescript": "5.9.3"
   },
   "scripts": {
     "build": "npm run clean && tsc && rollup -c",

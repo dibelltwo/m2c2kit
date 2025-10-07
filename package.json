@@ -29,7 +29,7 @@
   "scripts": {
     "build": "node scripts/build-all.mjs",
     "build-concurrent": "concurrently --kill-others-on-fail \"npm run build -w @m2c2kit/build-helpers\" && concurrently \"npm run build -w @m2c2kit/core\" \"npm run build -w @m2c2kit/cli\" \"npm run build -w @m2c2kit/schema-util\" \"npm run build -w @m2c2kit/data-calc\" && concurrently \"npm run build -w @m2c2kit/session\" \"npm run build -w @m2c2kit/addons\" \"npm run build -w @m2c2kit/physics\" \"npm run build -w @m2c2kit/survey\" \"npm run build -w @m2c2kit/db\" && concurrently \"npm run build -w @m2c2kit/schematics\" \"npm run build -w @m2c2kit/embedding\" \"npm run build -w @m2c2kit/assessment-grid-memory\" \"npm run build -w @m2c2kit/assessment-symbol-search\" \"npm run build -w @m2c2kit/assessment-color-dots\" \"npm run build -w @m2c2kit/assessment-color-shapes\" \"npm run build -w @m2c2kit/assessment-cli-starter\" && concurrently \"npm run build-webview -w @m2c2kit/assessments-demo\" && concurrently \"npm run build -w @m2c2kit/assessments-demo\" \"npm run build -w @m2c2kit/assessments-registry\" \"npm run copy-modules\"",
-    "test": "npx env-cmd -f .env.jest jest --runInBand",
+    "test": "npx env-cmd -f .env.jest -- jest --runInBand",
     "integration-test": "docker compose down && docker compose build m2c2kit --no-cache && docker compose build registry publish testapp testmodule --no-cache && docker compose up --exit-code-from m2c2kit",
     "copy-modules": "rimraf examples/no-js-bundler-development/modules && node scripts/copy-m2c2kit-modules.mjs",
     "publish-updated": "node scripts/publish-updated-packages.mjs",
@@ -49,24 +49,24 @@
   "homepage": "https://m2c2-project.github.io/m2c2kit",
   "devDependencies": {
     "@types/jest": "30.0.0",
-    "@types/semver": "7.7.0",
-    "concurrently": "9.2.0",
+    "@types/semver": "7.7.1",
+    "concurrently": "9.2.1",
     "cpy-cli": "4.2.0",
-    "env-cmd": "10.1.0",
-    "eslint": "^9.33.0",
+    "env-cmd": "11.0.0",
+    "eslint": "^9.37.0",
     "eslint-config-prettier": "^10.1.8",
-    "find-up": "7.0.0",
+    "find-up": "8.0.0",
     "husky": "9.1.7",
-    "jest": "30.0.5",
-    "jest-environment-jsdom": "30.0.5",
-    "lint-staged": "^16.1.5",
+    "jest": "30.2.0",
+    "jest-environment-jsdom": "30.2.0",
+    "lint-staged": "^16.2.3",
     "prettier": "3.6.2",
     "semver": "7.7.2",
     "syncpack": "13.0.4",
-    "ts-jest": "29.4.1",
+    "ts-jest": "29.4.4",
     "ts-jest-mock-import-meta": "1.3.1",
     "ts-node": "10.9.2",
-    "typescript-eslint": "^8.40.0"
+    "typescript-eslint": "^8.46.0"
   },
   "lint-staged": {
     "**/*": "prettier --write --ignore-unknown"

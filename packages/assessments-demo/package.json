@@ -37,16 +37,16 @@
   },
   "devDependencies": {
     "@m2c2kit/build-helpers": "0.3.28",
-    "@rollup/plugin-node-resolve": "16.0.1",
-    "concurrently": "9.2.0",
-    "esbuild": "0.25.9",
+    "@rollup/plugin-node-resolve": "16.0.2",
+    "concurrently": "9.2.1",
+    "esbuild": "0.25.10",
     "rimraf": "6.0.1",
-    "rollup": "4.46.4",
+    "rollup": "4.52.4",
     "rollup-plugin-copy": "3.5.0",
     "rollup-plugin-esbuild": "6.2.1",
     "rollup-plugin-livereload": "2.0.5",
     "rollup-plugin-serve": "3.0.0",
-    "typescript": "5.9.2"
+    "typescript": "5.9.3"
   },
   "engines": {
     "node": ">=18"

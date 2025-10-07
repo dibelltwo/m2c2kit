@@ -2,7 +2,7 @@
 /**
  * The code in this file is adapted from a reference CLI implementation from
  * the Angular devkit repository:
- *   https://github.com/angular/angular-cli/blob/37589b6d88e6db1e654192a996ab599d3ed98e27/packages/angular_devkit/schematics_cli/bin/schematics.ts
+ *   https://github.com/angular/angular-cli/blob/1c2d49ec736818d22773916d7eaafd3446275ea0/packages/angular_devkit/schematics_cli/bin/schematics.ts
  * The license for that code is as follows:
  * @license
  * Copyright Google LLC All Rights Reserved.
@@ -105,7 +105,6 @@ function _createPromptProvider(): schema.PromptProvider {
             definition.multiselect ? prompts.checkbox : prompts.select
           )({
             message: definition.message,
-            default: definition.default,
             validate: (values) => {
               if (!definition.validator) {
                 return true;
@@ -115,15 +114,28 @@ function _createPromptProvider(): schema.PromptProvider {
                 Object.values(values).map(({ value }) => value),
               );
             },
-            choices: definition.items.map((item) =>
+            default: definition.multiselect ? undefined : definition.default,
+            choices: definition.items?.map((item) =>
               typeof item == "string"
                 ? {
                     name: item,
                     value: item,
+                    checked:
+                      definition.multiselect &&
+                      Array.isArray(definition.default)
+                        ? definition.default?.includes(item)
+                        : item === definition.default,
                   }
                 : {
+                    ...item,
                     name: item.label,
                     value: item.value,
+                    checked:
+                      definition.multiselect &&
+                      Array.isArray(definition.default)
+                        ? // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                          definition.default?.includes(item.value as any)
+                        : item.value === definition.default,
                   },
             ),
           });

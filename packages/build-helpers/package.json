@@ -17,22 +17,22 @@
   "devDependencies": {
     "@rollup/plugin-commonjs": "28.0.6",
     "@rollup/plugin-json": "6.1.0",
-    "@rollup/plugin-node-resolve": "16.0.1",
+    "@rollup/plugin-node-resolve": "16.0.2",
     "@rollup/plugin-replace": "6.0.2",
     "@types/findup-sync": "4.0.5",
     "@types/fs-extra": "11.0.4",
-    "@types/semver": "7.7.0",
+    "@types/semver": "7.7.1",
     "cpy": "10.1.0",
     "findup-sync": "5.0.0",
-    "fs-extra": "11.3.1",
-    "magic-string": "0.30.17",
+    "fs-extra": "11.3.2",
+    "magic-string": "0.30.19",
     "rimraf": "6.0.1",
-    "rollup": "4.46.4",
+    "rollup": "4.52.4",
     "rollup-plugin-copy": "3.5.0",
     "rollup-plugin-dts": "6.2.3",
     "rollup-plugin-esbuild": "6.2.1",
     "semver": "7.7.2",
-    "typescript": "5.9.2"
+    "typescript": "5.9.3"
   },
   "scripts": {
     "build": "npm run clean && tsc && rollup -c",
@@ -55,7 +55,7 @@
     "css-select": "6.0.0",
     "dom-serializer": "2.0.0",
     "domhandler": "5.0.3",
-    "find-up": "7.0.0",
+    "find-up": "8.0.0",
     "htmlparser2": "10.0.0",
     "resolve": "1.22.10"
   },
