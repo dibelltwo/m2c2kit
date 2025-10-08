@@ -2,19 +2,31 @@
 import { RandomDraws } from "..";
 
 describe("test SingleFromRange", () => {
+  it("throws error when inputs are not integers", () => {
+    expect(() => {
+      RandomDraws.singleFromRange(0, 5.5);
+    }).toThrow(Error);
+  });
+
+  it("throws error when minimumInclusive > maximumInclusive", () => {
+    expect(() => {
+      RandomDraws.singleFromRange(10, 5);
+    }).toThrow(Error);
+  });
+
   it("draw is an integer from the range (1000 iterations)", () => {
     const iterations = 1000;
     const minInclusive = 0;
     const maxInclusive = 5;
     const draws = new Array<number>();
     for (let i = 0; i < iterations; i++) {
-      const value = RandomDraws.SingleFromRange(minInclusive, maxInclusive);
+      const value = RandomDraws.singleFromRange(minInclusive, maxInclusive);
       draws.push(value);
     }
     expect(
       draws.every(
-        (v) => Math.round(v) === v && v >= minInclusive && v <= maxInclusive
-      )
+        (v) => Math.round(v) === v && v >= minInclusive && v <= maxInclusive,
+      ),
     ).toBeTruthy();
   });
 
@@ -24,7 +36,7 @@ describe("test SingleFromRange", () => {
     const maxInclusive = 5;
     const draws = new Array<number>();
     for (let i = 0; i < iterations; i++) {
-      const value = RandomDraws.SingleFromRange(minInclusive, maxInclusive);
+      const value = RandomDraws.singleFromRange(minInclusive, maxInclusive);
       draws.push(value);
     }
     const numberWasDrawn = new Array<boolean>();
@@ -44,7 +56,7 @@ describe("test SingleFromRange", () => {
     const maxInclusive = 5;
     const draws = new Array<number>();
     for (let i = 0; i < iterations; i++) {
-      const value = RandomDraws.SingleFromRange(minInclusive, maxInclusive);
+      const value = RandomDraws.singleFromRange(minInclusive, maxInclusive);
       draws.push(value);
     }
     const average = draws.reduce((a, b) => a + b) / draws.length;
@@ -70,13 +82,13 @@ describe("test FromRangeWithoutReplacement", () => {
     (n) => {
       const minInclusive = 0;
       const maxInclusive = 5;
-      const draws = RandomDraws.FromRangeWithoutReplacement(
+      const draws = RandomDraws.fromRangeWithoutReplacement(
         n,
         minInclusive,
-        maxInclusive
+        maxInclusive,
       );
       expect(draws.length).toEqual(n);
-    }
+    },
   );
 
   it("chooses random numbers without replacement (100 iterations)", () => {
@@ -87,10 +99,10 @@ describe("test FromRangeWithoutReplacement", () => {
 
     const uniqueNumbers = new Array<number>();
     for (let i = 0; i < iterations; i++) {
-      const d = RandomDraws.FromRangeWithoutReplacement(
+      const d = RandomDraws.fromRangeWithoutReplacement(
         n,
         minInclusive,
-        maxInclusive
+        maxInclusive,
       );
       uniqueNumbers.push(new Set(d).size);
     }
@@ -103,13 +115,75 @@ describe("test FromRangeWithoutReplacement", () => {
     const maxInclusive = 5;
 
     const d = () =>
-      RandomDraws.FromRangeWithoutReplacement(
+      RandomDraws.fromRangeWithoutReplacement(
         maxInclusive + 2,
         minInclusive,
-        maxInclusive
+        maxInclusive,
       );
 
     expect(d).toThrow(Error);
+  });
+
+  it("returns an empty array when n = 0", () => {
+    const draws = RandomDraws.fromRangeWithoutReplacement(0, 0, 5);
+    expect(draws).toEqual([]);
+  });
+
+  it("returns all values in the range when n equals range size", () => {
+    const minInclusive = 0;
+    const maxInclusive = 5;
+    const n = maxInclusive - minInclusive + 1;
+    const draws = RandomDraws.fromRangeWithoutReplacement(
+      n,
+      minInclusive,
+      maxInclusive,
+    );
+    const expectedSet = new Set(Array.from({ length: n }, (_, i) => i));
+    expect(new Set(draws)).toEqual(expectedSet);
+  });
+
+  it("handles ranges with negative numbers", () => {
+    const draws = RandomDraws.fromRangeWithoutReplacement(3, -5, -1);
+    expect(draws.length).toBe(3);
+    draws.forEach((num) => {
+      expect(num).toBeGreaterThanOrEqual(-5);
+      expect(num).toBeLessThanOrEqual(-1);
+    });
+  });
+
+  it("returns the only value when range has one value and n = 1", () => {
+    const draws = RandomDraws.fromRangeWithoutReplacement(1, 5, 5);
+    expect(draws).toEqual([5]);
+  });
+
+  it("returns empty array when range has one value and n = 0", () => {
+    const draws = RandomDraws.fromRangeWithoutReplacement(0, 5, 5);
+    expect(draws).toEqual([]);
+  });
+
+  it("throws error when n > 1 and range has only one value", () => {
+    expect(() => {
+      RandomDraws.fromRangeWithoutReplacement(2, 5, 5);
+    }).toThrow(Error);
+  });
+
+  it("samples correctly from a large range", () => {
+    const draws = RandomDraws.fromRangeWithoutReplacement(5, 0, 1_000_000_000);
+    expect(draws.length).toBe(5);
+    const unique = new Set(draws);
+    expect(unique.size).toBe(5);
+  });
+
+  it("throws error when inputs are not integers", () => {
+    expect(() => {
+      RandomDraws.fromRangeWithoutReplacement(3.5, 0, 5);
+    }).toThrow(Error);
+  });
+
+  it("throws error when minimumInclusive > maximumInclusive", () => {
+    expect(() => {
+      RandomDraws.fromRangeWithoutReplacement(1, 10, 5);
+    }).toThrow(Error);
   });
 });
 
@@ -119,9 +193,9 @@ describe("test FromGridWithoutReplacement", () => {
     (n) => {
       const rows = 4;
       const columns = 5;
-      const draws = RandomDraws.FromGridWithoutReplacement(n, rows, columns);
+      const draws = RandomDraws.fromGridWithoutReplacement(n, rows, columns);
       expect(draws.length).toEqual(n);
-    }
+    },
   );
 
   it("draws all grid cells within the range at least once (10000 iterations)", () => {
@@ -132,7 +206,7 @@ describe("test FromGridWithoutReplacement", () => {
     const draws = new Array<Array<{ row: number; column: number }>>();
 
     for (let i = 0; i < iterations; i++) {
-      const cells = RandomDraws.FromGridWithoutReplacement(1, rows, columns);
+      const cells = RandomDraws.fromGridWithoutReplacement(1, rows, columns);
       draws.push(cells);
     }
 
@@ -147,9 +221,74 @@ describe("test FromGridWithoutReplacement", () => {
     draws.forEach((d) =>
       d.forEach((c) => {
         cellWasDrawn[c.row][c.column] = true;
-      })
+      }),
     );
 
     expect(cellWasDrawn.flat().every((c) => c)).toBeTruthy();
+  });
+});
+
+describe("test seeded PRNG", () => {
+  it("returns expected random number when using seeded PRNG", () => {
+    RandomDraws.setSeed("test-seed");
+    const draw = RandomDraws.singleFromRange(0, 10_000_000_000);
+    expect(draw).toBe(3490856405);
+  });
+
+  it("stops using seeded PRNG after calling useDefaultRandom", () => {
+    RandomDraws.setSeed("test-seed");
+    RandomDraws.useDefaultRandom();
+    const draw = RandomDraws.singleFromRange(0, 10_000_000_000);
+    expect(draw).not.toBe(3490856405);
+  });
+});
+
+describe("test random", () => {
+  it("returns values in the expected range when using seeded PRNG", () => {
+    RandomDraws.setSeed("test-seed");
+    const iterations = 1000;
+    const draws = new Array<number>();
+    for (let i = 0; i < iterations; i++) {
+      const value = RandomDraws.random();
+      draws.push(value);
+    }
+    expect(draws.every((v) => v >= 0 && v < 1)).toBeTruthy();
+  });
+
+  it("returns values in the expected range when using default Math.random", () => {
+    const iterations = 1000;
+    const draws = new Array<number>();
+    for (let i = 0; i < iterations; i++) {
+      const value = RandomDraws.random();
+      draws.push(value);
+    }
+    expect(draws.every((v) => v >= 0 && v < 1)).toBeTruthy();
+  });
+
+  it("it has the mean in an expected interval when using seeded PRNG", () => {
+    RandomDraws.setSeed("test-seed");
+    const iterations = 5000;
+    let sum = 0;
+    for (let i = 0; i < iterations; i++) {
+      const value = RandomDraws.random();
+      sum += value;
+    }
+    const mean = sum / iterations;
+    // outside this interval would be very unlikely (less than 1 in a quadrillion)
+    expect(mean).toBeGreaterThan(0.45);
+    expect(mean).toBeLessThan(0.55);
+  });
+
+  it("it has the mean in an expected interval when using default Math.random", () => {
+    const iterations = 5000;
+    let sum = 0;
+    for (let i = 0; i < iterations; i++) {
+      const value = RandomDraws.random();
+      sum += value;
+    }
+    const mean = sum / iterations;
+    // outside this interval would be very unlikely (less than 1 in a quadrillion)
+    expect(mean).toBeGreaterThan(0.45);
+    expect(mean).toBeLessThan(0.55);
   });
 });
