@@ -4,6 +4,148 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## `@m2c2kit/core` [0.3.33] - 2025-10-09
+
+### Added
+
+- Seeded pseudo-random number generator.
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/addons` [0.3.32] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/session` [0.3.15] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/physics` [0.1.20] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/data-calc` [0.8.4] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/cli` [0.3.32] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/schematics` [0.1.32] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/embedding` [1.0.26] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/build-helpers` [0.3.29] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/db` [0.3.27] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/survey` [0.3.28] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/schema-util` [0.1.23] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+### Fixed
+
+- Potential path traversal vulnerabilities and use of `eval()`.
+
+## `@m2c2kit/assessments-registry` [0.1.12] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessment-symbol-search` [0.8.31] - 2025-10-09
+
+### Added
+
+- Parameter for randomization seed.
+- `participant_score` in scoring data
+
+### Changed
+
+- Updated dependencies.
+- Default number of trials is now 20.
+
+## `@m2c2kit/assessment-grid-memory` [0.8.31] - 2025-10-09
+
+### Added
+
+- Parameter for randomization seed.
+- `percent_exact_targets` in scoring data
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessment-color-shapes` [0.8.31] - 2025-10-09
+
+### Added
+
+- Parameter for randomization seed.
+
+### Changed
+
+- Updated dependencies.
+- Default number of trials is now 12.
+
+## `@m2c2kit/assessment-color-dots` [0.8.31] - 2025-10-09
+
+### Added
+
+- Parameter for randomization seed.
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessments-demo` [0.8.28] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessment-cli-starter` [0.8.29] - 2025-10-09
+
+### Changed
+
+- Updated dependencies.
+
 ## `@m2c2kit/core` [0.3.32] - 2025-07-16
 
 ### Changed
