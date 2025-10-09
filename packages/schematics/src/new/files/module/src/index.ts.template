@@ -194,7 +194,7 @@ m2c2kit CLI. It is a starting point for creating your own assessment modules.`,
     const numberOfEvenTrials = Math.round(
       numberOfTrials * game.getParameter<number>("percent_even_trials")
     );
-    const evenTrialIndexes = RandomDraws.FromRangeWithoutReplacement(
+    const evenTrialIndexes = RandomDraws.fromRangeWithoutReplacement(
       numberOfEvenTrials,
       0,
       numberOfTrials - 1
@@ -212,7 +212,7 @@ m2c2kit CLI. It is a starting point for creating your own assessment modules.`,
        * to the next even or odd number.
        */
       if (evenTrialIndexes.indexOf(i) !== -1) {
-        number = RandomDraws.SingleFromRange(lowerBound, upperBound);
+        number = RandomDraws.singleFromRange(lowerBound, upperBound);
         while (number % 2 === 1 || number > upperBound) {
           if (number > upperBound) {
             number = lowerBound;
@@ -221,7 +221,7 @@ m2c2kit CLI. It is a starting point for creating your own assessment modules.`,
           number++;
         }
       } else {
-        number = RandomDraws.SingleFromRange(lowerBound, upperBound);
+        number = RandomDraws.singleFromRange(lowerBound, upperBound);
         while (number % 2 === 0 || number > upperBound) {
           if (number > upperBound) {
             number = lowerBound;

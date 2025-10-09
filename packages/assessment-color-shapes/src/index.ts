@@ -146,6 +146,12 @@ class ColorShapes extends Game {
         description:
           "Should the icon that allows the participant to switch the locale be shown?",
       },
+      seed: {
+        type: ["string", "null"],
+        default: null,
+        description:
+          "Optional seed for the seeded pseudo-random number generator. When null, the default Math.random() is used.",
+      },
     };
 
     /**
@@ -418,6 +424,11 @@ phases.`,
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const game = this;
 
+    const seed = game.getParameter<string | null>("seed");
+    if (typeof seed === "string") {
+      RandomDraws.setSeed(seed);
+    }
+
     const SHAPE_SVG_HEIGHT = 96;
     const SQUARE_SIDE_LENGTH = 350;
     const numberOfShapesShown = game.getParameter<number>(
@@ -583,7 +594,7 @@ phases.`,
     const numberOfDifferentColorsTrials = game.getParameter<number>(
       "number_of_different_colors_trials",
     );
-    const differentColorsTrialIndexes = RandomDraws.FromRangeWithoutReplacement(
+    const differentColorsTrialIndexes = RandomDraws.fromRangeWithoutReplacement(
       numberOfDifferentColorsTrials,
       0,
       numberOfTrials - 1,
@@ -592,12 +603,12 @@ phases.`,
     for (let i = 0; i < numberOfTrials; i++) {
       const presentShapes = new Array<DisplayShape>();
       const responseShapes = new Array<DisplayShape>();
-      const shapesToShowIndexes = RandomDraws.FromRangeWithoutReplacement(
+      const shapesToShowIndexes = RandomDraws.fromRangeWithoutReplacement(
         numberOfShapesShown,
         0,
         shapeLibrary.length - 1,
       );
-      const shapeColorsIndexes = RandomDraws.FromRangeWithoutReplacement(
+      const shapeColorsIndexes = RandomDraws.fromRangeWithoutReplacement(
         numberOfShapesShown,
         0,
         shapeColors.length - 1,
@@ -662,7 +673,7 @@ phases.`,
         column: number;
       }[];
       do {
-        presentLocations = RandomDraws.FromGridWithoutReplacement(
+        presentLocations = RandomDraws.fromGridWithoutReplacement(
           numberOfShapesShown,
           rows,
           columns,
@@ -692,7 +703,7 @@ phases.`,
         column: number;
       }[];
       do {
-        responseLocations = RandomDraws.FromGridWithoutReplacement(
+        responseLocations = RandomDraws.fromGridWithoutReplacement(
           numberOfShapesShown,
           rows,
           columns,
@@ -727,7 +738,7 @@ phases.`,
             `number_of_shapes_changing_color is ${numberOfShapesToChange}, but it must be less than or equal to number_of_shapes_shown (which is ${numberOfShapesShown}).`,
           );
         }
-        const shapesToChangeIndexes = RandomDraws.FromRangeWithoutReplacement(
+        const shapesToChangeIndexes = RandomDraws.fromRangeWithoutReplacement(
           numberOfShapesToChange,
           0,
           numberOfShapesShown - 1,

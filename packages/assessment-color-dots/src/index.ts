@@ -145,6 +145,12 @@ class ColorDots extends Game {
         description:
           "Should the icon that allows the participant to switch the locale be shown?",
       },
+      seed: {
+        type: ["string", "null"],
+        default: null,
+        description:
+          "Optional seed for the seeded pseudo-random number generator. When null, the default Math.random() is used.",
+      },
     };
 
     /**
@@ -411,6 +417,11 @@ appeared.",
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const game = this;
 
+    const seed = game.getParameter<string | null>("seed");
+    if (typeof seed === "string") {
+      RandomDraws.setSeed(seed);
+    }
+
     const SQUARE_SIDE_LENGTH = 350;
 
     // ==============================================================
@@ -600,17 +611,17 @@ appeared.",
         let y: number;
         do {
           // +4, -4 to have some small margin between dot and square
-          x = RandomDraws.SingleFromRange(
+          x = RandomDraws.singleFromRange(
             0 + dotDiameter / 2 + 4,
             SQUARE_SIDE_LENGTH - dotDiameter / 2 - 4,
           );
-          y = RandomDraws.SingleFromRange(
+          y = RandomDraws.singleFromRange(
             0 + dotDiameter / 2 + 4,
             SQUARE_SIDE_LENGTH - dotDiameter / 2 - 4,
           );
         } while (positionTooCloseToOtherDots(x, y, dots));
 
-        const colorIndex = RandomDraws.SingleFromRange(
+        const colorIndex = RandomDraws.singleFromRange(
           0,
           availableColors.length - 1,
         );
@@ -624,7 +635,7 @@ appeared.",
         dots.push(dot);
       }
 
-      const colorSelectionDotIndex = RandomDraws.SingleFromRange(
+      const colorSelectionDotIndex = RandomDraws.singleFromRange(
         0,
         dots.length - 1,
       );
@@ -1027,7 +1038,7 @@ appeared.",
 
       let locationSelectionDotIndex = -1;
       do {
-        locationSelectionDotIndex = RandomDraws.SingleFromRange(
+        locationSelectionDotIndex = RandomDraws.singleFromRange(
           0,
           numberOfDots - 1,
         );

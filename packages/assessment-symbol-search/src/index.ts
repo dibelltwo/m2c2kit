@@ -152,6 +152,12 @@ positions.",
         description:
           "When scoring, values of response_time_duration_ms less than the lower bound or greater than the upper bound are discarded. This array contains two numbers, the lower and upper bounds.",
       },
+      seed: {
+        type: ["string", "null"],
+        default: null,
+        description:
+          "Optional seed for the seeded pseudo-random number generator. When null, the default Math.random() is used.",
+      },
     };
 
     /**
@@ -326,6 +332,11 @@ positions.",
       median_response_time_incorrect: {
         type: ["number", "null"],
         description: "Median response time for incorrect trials.",
+      },
+      participant_score: {
+        type: ["number", "null"],
+        description:
+          "Participant-facing score, calculated as 10,000 / median response time for correct responses. This is a simple metric to provide feedback to the participant. Null if no correct responses.",
       },
     };
 
@@ -711,6 +722,11 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const game = this;
 
+    const seed = game.getParameter<string | null>("seed");
+    if (typeof seed === "string") {
+      RandomDraws.setSeed(seed);
+    }
+
     // these are defined in game options images
     const NUMBER_OF_SYMBOLS = 24;
 
@@ -965,12 +981,12 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
     const numberOfLeftCorrectTrials = Math.round(
       numberOfTrials * leftCorrectPercent,
     );
-    const lureTrialIndexes = RandomDraws.FromRangeWithoutReplacement(
+    const lureTrialIndexes = RandomDraws.fromRangeWithoutReplacement(
       numberOfLureTrials,
       0,
       numberOfTrials - 1,
     );
-    const leftCorrectTrialIndexes = RandomDraws.FromRangeWithoutReplacement(
+    const leftCorrectTrialIndexes = RandomDraws.fromRangeWithoutReplacement(
       numberOfLeftCorrectTrials,
       0,
       numberOfTrials - 1,
@@ -1019,7 +1035,7 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
          * the top symbols. Thus we need just one extra symbol for the bottom
          * card
          */
-        symbols = RandomDraws.FromRangeWithoutReplacement(
+        symbols = RandomDraws.fromRangeWithoutReplacement(
           numberOfTopCards * 2 + 1,
           1,
           NUMBER_OF_SYMBOLS,
@@ -1029,7 +1045,7 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
          * 2 unique random symbols for each top card, plus 2 for the incorrect
          * bottom card
          */
-        symbols = RandomDraws.FromRangeWithoutReplacement(
+        symbols = RandomDraws.fromRangeWithoutReplacement(
           numberOfTopCards * 2 + 2,
           1,
           NUMBER_OF_SYMBOLS,
@@ -1046,7 +1062,7 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
         topCards.push(card);
       }
 
-      const correctCardIndex = RandomDraws.FromRangeWithoutReplacement(
+      const correctCardIndex = RandomDraws.fromRangeWithoutReplacement(
         1,
         0,
         numberOfTopCards - 1,
@@ -1067,7 +1083,7 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
           .filter((c) => c != correctCard)
           .map((c) => [c.top, c.bottom])
           .flat();
-        const lureSymbolIndex = RandomDraws.FromRangeWithoutReplacement(
+        const lureSymbolIndex = RandomDraws.fromRangeWithoutReplacement(
           1,
           0,
           potentialLureSymbols.length - 1,
@@ -1395,53 +1411,60 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
     },
   ) {
     const dc = new DataCalc(data);
-    const scores = dc.summarize({
-      activity_begin_iso8601_timestamp: this.beginIso8601Timestamp,
-      first_trial_begin_iso8601_timestamp: dc
-        .arrange("trial_begin_iso8601_timestamp")
-        .slice(0)
-        .pull("trial_begin_iso8601_timestamp"),
-      last_trial_end_iso8601_timestamp: dc
-        .arrange("-trial_end_iso8601_timestamp")
-        .slice(0)
-        .pull("trial_end_iso8601_timestamp"),
-      n_trials: dc.length,
-      flag_trials_match_expected: dc.length === extras.numberOfTrials ? 1 : 0,
-      n_trials_lure: dc.filter((obs) => obs.trial_type === "lure").length,
-      n_trials_normal: dc.filter((obs) => obs.trial_type === "normal").length,
-      n_trials_correct: dc.filter(
-        (obs) => obs.user_response_index === obs.correct_response_index,
-      ).length,
-      n_trials_incorrect: dc.filter(
-        (obs) => obs.user_response_index !== obs.correct_response_index,
-      ).length,
-      median_response_time_overall: median("response_time_duration_ms"),
-      median_response_time_filtered: median(
-        dc
-          .filter(
-            (obs) =>
-              obs.response_time_duration_ms >= extras.rtLowerBound &&
-              obs.response_time_duration_ms <= extras.rtUpperBound,
-          )
-          .pull("response_time_duration_ms"),
-      ),
-      median_response_time_correct: median(
-        dc
-          .filter(
-            (obs) => obs.user_response_index === obs.correct_response_index,
-          )
-          .pull("response_time_duration_ms"),
-      ),
-      median_response_time_incorrect: median(
-        dc
-          .filter(
-            (obs) => obs.user_response_index !== obs.correct_response_index,
-          )
-          .pull("response_time_duration_ms"),
-      ),
-      response_time_filter_lower_bound: extras.rtLowerBound,
-      response_time_filter_upper_bound: extras.rtUpperBound,
-    });
+    const scores = dc
+      .summarize({
+        activity_begin_iso8601_timestamp: this.beginIso8601Timestamp,
+        first_trial_begin_iso8601_timestamp: dc
+          .arrange("trial_begin_iso8601_timestamp")
+          .slice(0)
+          .pull("trial_begin_iso8601_timestamp"),
+        last_trial_end_iso8601_timestamp: dc
+          .arrange("-trial_end_iso8601_timestamp")
+          .slice(0)
+          .pull("trial_end_iso8601_timestamp"),
+        n_trials: dc.length,
+        flag_trials_match_expected: dc.length === extras.numberOfTrials ? 1 : 0,
+        n_trials_lure: dc.filter((obs) => obs.trial_type === "lure").length,
+        n_trials_normal: dc.filter((obs) => obs.trial_type === "normal").length,
+        n_trials_correct: dc.filter(
+          (obs) => obs.user_response_index === obs.correct_response_index,
+        ).length,
+        n_trials_incorrect: dc.filter(
+          (obs) => obs.user_response_index !== obs.correct_response_index,
+        ).length,
+        median_response_time_overall: median("response_time_duration_ms"),
+        median_response_time_filtered: median(
+          dc
+            .filter(
+              (obs) =>
+                obs.response_time_duration_ms >= extras.rtLowerBound &&
+                obs.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        median_response_time_correct: median(
+          dc
+            .filter(
+              (obs) => obs.user_response_index === obs.correct_response_index,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        median_response_time_incorrect: median(
+          dc
+            .filter(
+              (obs) => obs.user_response_index !== obs.correct_response_index,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        response_time_filter_lower_bound: extras.rtLowerBound,
+        response_time_filter_upper_bound: extras.rtUpperBound,
+      })
+      .mutate({
+        participant_score: (obs) =>
+          obs.median_response_time_correct === null
+            ? null
+            : 10000 / obs.median_response_time_correct,
+      });
     return scores.observations;
   }
 
@@ -1456,8 +1479,8 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
     const copy = [...array];
     const shuffled = [];
     while (copy.length > 0) {
-      // Generate a random index between 0 and the length of the copy array
-      const index = Math.floor(Math.random() * copy.length);
+      // Generate a random index between 0 and the length of the copy array - 1, inclusive
+      const index = RandomDraws.singleFromRange(0, copy.length - 1);
       // Remove the item at the random index from the copy array and push it to the shuffled array
       shuffled.push(copy.splice(index, 1)[0]);
     }

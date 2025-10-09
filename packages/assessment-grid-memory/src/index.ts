@@ -127,6 +127,12 @@ class GridMemory extends Game implements ScoringProvider {
         default: false,
         description: "Should scoring data be generated? Default is false.",
       },
+      seed: {
+        type: ["string", "null"],
+        default: null,
+        description:
+          "Optional seed for the seeded pseudo-random number generator. When null, the default Math.random() is used.",
+      },
     };
 
     /**
@@ -343,6 +349,11 @@ class GridMemory extends Game implements ScoringProvider {
         description:
           "Sum of the number of exact targets across all trials. An exact target is a target that was selected in the correct location.",
       },
+      percent_exact_targets: {
+        type: "number",
+        description:
+          "Percent of exact targets out of all targets across all trials. An exact target is a target that was selected in the correct location.",
+      },
     };
 
     const translation: Translation = {
@@ -529,6 +540,11 @@ phase, participants report the location of dots on a grid.",
     // (even though eslint doesn't like it)
     // eslint-disable-next-line @typescript-eslint/no-this-alias
     const game = this;
+
+    const seed = game.getParameter<string | null>("seed");
+    if (typeof seed === "string") {
+      RandomDraws.setSeed(seed);
+    }
 
     // ==============================================================
     // variables user actions with dots and interference targets
@@ -763,7 +779,7 @@ phase, participants report the location of dots on a grid.",
           }),
           Action.custom({
             callback: () => {
-              presentedCells = RandomDraws.FromGridWithoutReplacement(
+              presentedCells = RandomDraws.fromGridWithoutReplacement(
                 NUMBER_OF_DOTS,
                 5,
                 5,
@@ -823,6 +839,28 @@ phase, participants report the location of dots on a grid.",
 
     interferenceScene.addChild(interferenceGrid);
 
+    /**
+     * Determine in advance the randomization of multiple interference
+     * target grids. This is necessary because the participant will be shown a
+     * variable number of interference grids, depending on how
+     * quickly they tap the targets. However, we want the number of calls to
+     * the random number generator to be fixed, so that if the randomization
+     * is being done by a seeded pseudo-random number generator, the results
+     * are reproducible. Here we create 10 different randomization grids,
+     * which should be more than enough for any session that is done by a
+     * human participant.
+     */
+    const FCellsRandomization = new Array<Array<Cell>>();
+    for (let i = 0; i < 10; i++) {
+      FCellsRandomization.push(
+        RandomDraws.fromGridWithoutReplacement(
+          game.getParameter<number>("number_of_interference_targets"),
+          8,
+          5,
+        ),
+      );
+    }
+
     interferenceScene.onSetup(() => {
       userInterferenceActions = new Array<UserAction>();
       // note: we should really start the timer in onAppear, but that can
@@ -864,11 +902,20 @@ phase, participants report the location of dots on a grid.",
         const number_of_interference_targets = game.getParameter<number>(
           "number_of_interference_targets",
         );
-        const FCells = RandomDraws.FromGridWithoutReplacement(
-          number_of_interference_targets,
-          8,
-          5,
-        );
+        let FCells = FCellsRandomization.pop();
+        /**
+         * If for some reason we run out of pre-generated random grids,
+         * generate a new one on the fly to prevent the app from crashing.
+         * This should never happen in practice, unless the trials are
+         * being run by a bot or the developer is testing the app.
+         */
+        if (!FCells) {
+          FCells = RandomDraws.fromGridWithoutReplacement(
+            number_of_interference_targets,
+            8,
+            5,
+          );
+        }
         for (let i = 0; i < 8; i++) {
           for (let j = 0; j < 5; j++) {
             const square = new Shape({
@@ -1252,26 +1299,33 @@ phase, participants report the location of dots on a grid.",
       };
     });
 
-    const scores = dc.summarize({
-      activity_begin_iso8601_timestamp: this.beginIso8601Timestamp,
-      first_trial_begin_iso8601_timestamp: dc
-        .arrange("trial_begin_iso8601_timestamp")
-        .slice(0)
-        .pull("trial_begin_iso8601_timestamp"),
-      last_trial_end_iso8601_timestamp: dc
-        .arrange("-trial_end_iso8601_timestamp")
-        .slice(0)
-        .pull("trial_end_iso8601_timestamp"),
-      n_trials: dc.length,
-      flag_trials_match_expected: dc.length === extras.numberOfTrials ? 1 : 0,
-      distance_hausdorff_median: median(
-        new DataCalc(distances).pull("hausdorff_distance"),
-      ),
-      n_trials_exact_targets: dc.filter(
-        (obs) => obs.number_of_correct_dots === extras.numberOfDots,
-      ).length,
-      sum_exact_targets: sum("number_of_correct_dots"),
-    });
+    const scores = dc
+      .summarize({
+        activity_begin_iso8601_timestamp: this.beginIso8601Timestamp,
+        first_trial_begin_iso8601_timestamp: dc
+          .arrange("trial_begin_iso8601_timestamp")
+          .slice(0)
+          .pull("trial_begin_iso8601_timestamp"),
+        last_trial_end_iso8601_timestamp: dc
+          .arrange("-trial_end_iso8601_timestamp")
+          .slice(0)
+          .pull("trial_end_iso8601_timestamp"),
+        n_trials: dc.length,
+        flag_trials_match_expected: dc.length === extras.numberOfTrials ? 1 : 0,
+        distance_hausdorff_median: median(
+          new DataCalc(distances).pull("hausdorff_distance"),
+        ),
+        n_trials_exact_targets: dc.filter(
+          (obs) => obs.number_of_correct_dots === extras.numberOfDots,
+        ).length,
+        sum_exact_targets: sum("number_of_correct_dots"),
+      })
+      .mutate({
+        percent_exact_targets: (obs) =>
+          obs.n_trials === 0
+            ? null
+            : obs.sum_exact_targets / (obs.n_trials * extras.numberOfDots),
+      });
     return scores.observations;
   }
 }
