@@ -3,6 +3,7 @@ import { M2Error } from "./M2Error";
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class RandomDraws {
   private static randomFunction: () => number = Math.random;
+  private static seededPRNG: (() => number) | null = null;
 
   /**
    * Sets the seed for the pseudo-random number generator (PRNG) and
@@ -15,7 +16,8 @@ export class RandomDraws {
    * @param seed - The seed string to initialize the PRNG.
    */
   public static setSeed(seed: string) {
-    this.randomFunction = seedrandom(seed);
+    this.seededPRNG = seedrandom(seed);
+    this.randomFunction = this.seededPRNG;
   }
 
   /**
@@ -25,6 +27,22 @@ export class RandomDraws {
    */
   public static useDefaultRandom() {
     this.randomFunction = Math.random;
+  }
+
+  /**
+   * Instructs methods within `RandomDraws` to use the seeded
+   * pseudo-random number generator (PRNG).
+   *
+   * @remarks This method will throw an error if `setSeed()` has not
+   * been called first to initialize the seeded PRNG.
+   */
+  public static useSeededRandom() {
+    if (this.seededPRNG === null) {
+      throw new M2Error(
+        "Cannot use seeded random function because no seed has been set. Call setSeed() first.",
+      );
+    }
+    this.randomFunction = this.seededPRNG;
   }
 
   /**

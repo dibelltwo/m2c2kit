@@ -1,7 +1,7 @@
 /* eslint-disable @typescript-eslint/ban-ts-comment */
 import { RandomDraws } from "..";
 
-describe("test SingleFromRange", () => {
+describe("test singleFromRange", () => {
   it("throws error when inputs are not integers", () => {
     expect(() => {
       RandomDraws.singleFromRange(0, 5.5);
@@ -76,7 +76,7 @@ describe("test SingleFromRange", () => {
   });
 });
 
-describe("test FromRangeWithoutReplacement", () => {
+describe("test fromRangeWithoutReplacement", () => {
   it.each([[0], [1], [2], [3], [4], [5], [6]])(
     "returns an array with expected number of draws",
     (n) => {
@@ -187,7 +187,7 @@ describe("test FromRangeWithoutReplacement", () => {
   });
 });
 
-describe("test FromGridWithoutReplacement", () => {
+describe("test fromGridWithoutReplacement", () => {
   it.each([[0], [1], [2], [3], [4], [5], [6], [7], [8], [20]])(
     "returns an array with expected number of grid draws",
     (n) => {
@@ -240,6 +240,16 @@ describe("test seeded PRNG", () => {
     RandomDraws.useDefaultRandom();
     const draw = RandomDraws.singleFromRange(0, 10_000_000_000);
     expect(draw).not.toBe(3490856405);
+  });
+
+  it("uses seeded PRNG after using default random to generate numbers", () => {
+    RandomDraws.setSeed("test-seed");
+    RandomDraws.useDefaultRandom();
+    const defaultDraw = RandomDraws.singleFromRange(0, 10_000_000_000);
+    expect(defaultDraw).not.toBe(3490856405);
+    RandomDraws.useSeededRandom();
+    const draw = RandomDraws.singleFromRange(0, 10_000_000_000);
+    expect(draw).toBe(3490856405);
   });
 });
 
