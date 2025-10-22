@@ -20,9 +20,9 @@
   },
   "devDependencies": {
     "@m2c2kit/build-helpers": "0.3.29",
-    "esbuild": "0.25.10",
+    "esbuild": "0.25.11",
     "rimraf": "6.0.1",
-    "rollup": "4.52.4",
+    "rollup": "4.52.5",
     "rollup-plugin-copy": "3.5.0",
     "rollup-plugin-dts": "6.2.3",
     "rollup-plugin-esbuild": "6.2.1",
