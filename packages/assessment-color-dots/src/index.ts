@@ -21,6 +21,9 @@ import {
   Translation,
   LabelHorizontalAlignmentMode,
   M2Error,
+  ScoringProvider,
+  ActivityKeyValueData,
+  ScoringSchema,
 } from "@m2c2kit/core";
 import {
   Button,
@@ -30,13 +33,14 @@ import {
   InstructionsOptions,
   LocalePicker,
 } from "@m2c2kit/addons";
+import { DataCalc, sum } from "@m2c2kit/data-calc";
 
 /**
  * Color Dots is cued-recall, item-location memory binding task, where after
  * viewing 3 dots for a brief period of time, participants report: (1) the
  * color at a cued location; (2) the location of a cued color.
  */
-class ColorDots extends Game {
+class ColorDots extends Game implements ScoringProvider {
   constructor() {
     /**
      * These are configurable game parameters and their defaults.
@@ -150,6 +154,11 @@ class ColorDots extends Game {
         default: null,
         description:
           "Optional seed for the seeded pseudo-random number generator. When null, the default Math.random() is used.",
+      },
+      scoring: {
+        type: "boolean",
+        default: false,
+        description: "Should scoring data be generated? Default is false.",
       },
     };
 
@@ -289,6 +298,41 @@ class ColorDots extends Game {
       },
     };
 
+    const colorDotsScoringSchema: ScoringSchema = {
+      activity_begin_iso8601_timestamp: {
+        type: "string",
+        format: "date-time",
+        description:
+          "ISO 8601 timestamp at the beginning of the game activity.",
+      },
+      first_trial_begin_iso8601_timestamp: {
+        type: ["string", "null"],
+        format: "date-time",
+        description:
+          "ISO 8601 timestamp at the beginning of the first trial. Null if no trials were completed.",
+      },
+      last_trial_end_iso8601_timestamp: {
+        type: ["string", "null"],
+        format: "date-time",
+        description:
+          "ISO 8601 timestamp at the end of the last trial. Null if no trials were completed.",
+      },
+      n_trials: {
+        type: "integer",
+        description: "Number of trials completed.",
+      },
+      flag_trials_match_expected: {
+        type: "integer",
+        description:
+          "Does the number of completed and expected trials match? 1 = true, 0 = false.",
+      },
+      participant_score: {
+        type: ["number", "null"],
+        description:
+          "Participant-facing score. It is a weighted score of color identification and location accuracy. This is a simple metric to provide feedback to the participant. Null if no trials attempted.",
+      },
+    };
+
     const translation: Translation = {
       configuration: {
         baseLocale: "en-US",
@@ -368,6 +412,7 @@ appeared.",
       height: 800,
       bodyBackgroundColor: WebColors.White,
       trialSchema: colorDotsTrialSchema,
+      scoringSchema: colorDotsScoringSchema,
       parameters: defaultParameters,
       fonts: [
         {
@@ -441,6 +486,17 @@ appeared.",
         game.presentScene(blankScene);
         game.addTrialData("quit_button_pressed", true);
         game.trialComplete();
+        if (game.getParameter<boolean>("scoring")) {
+          // Score the data only if user does not quit. If user quits, pass
+          // empty data to calculateScores so a "blank" set of scores is
+          // generated.
+          const scores = game.calculateScores([], {
+            numberOfTrials: game.getParameter<number>("number_of_trials"),
+            dotDiameter: game.getParameter<number>("dot_diameter"),
+          });
+          game.addScoringData(scores);
+          game.scoringComplete();
+        }
         game.cancel();
       });
     }
@@ -1172,6 +1228,15 @@ appeared.",
       if (game.trialIndex < game.getParameter<number>("number_of_trials")) {
         game.presentScene(fixationScene);
       } else {
+        if (game.getParameter<boolean>("scoring")) {
+          const scores = game.calculateScores(game.data.trials, {
+            numberOfTrials: game.getParameter<number>("number_of_trials"),
+            dotDiameter: game.getParameter<number>("dot_diameter"),
+          });
+          game.addScoringData(scores);
+          game.scoringComplete();
+        }
+
         if (game.getParameter("show_trials_complete_scene")) {
           game.presentScene(
             doneScene,
@@ -1215,6 +1280,86 @@ appeared.",
       // no need to have cancel button, because we're done
       game.removeAllFreeNodes();
     });
+  }
+
+  calculateScores(
+    data: ActivityKeyValueData[],
+    extras: {
+      numberOfTrials: number;
+      dotDiameter: number;
+    },
+  ) {
+    /**
+     * Calculate the maximum distance from a point within a square.
+     *
+     * @remarks When calculating the participant score, we need to know the
+     * maximum possible distance from the target location to any possible
+     * location within the square (the "worst" possible response). This is
+     * needed to scale the placement response between 0 and 100.
+     * We also account for a buffer distance from the edges of the
+     * square  because the dot cannot be placed such that it is outside the
+     * square. The buffer is equal to the dot radius.
+     *
+     * @param s - side length of the square.
+     * @param p - point within the square.
+     * @param buffer - buffer distance from the edges of the square.
+     * @returns The maximum distance from the point to the corners of the
+     * square, less the buffer.
+     */
+    const maxDistanceWithinSquare = (
+      s: number,
+      p: { x: number; y: number },
+      buffer: number,
+    ): number => {
+      const corners: Point[] = [
+        { x: buffer, y: buffer },
+        { x: s - buffer, y: buffer },
+        { x: buffer, y: s - buffer },
+        { x: s - buffer, y: s - buffer },
+      ];
+
+      return corners.reduce((maxDist, corner) => {
+        const dx = p.x - corner.x;
+        const dy = p.y - corner.y;
+        const dist = Math.sqrt(dx * dx + dy * dy);
+        return Math.max(maxDist, dist);
+      }, 0);
+    };
+
+    const dc = new DataCalc(data);
+    const scores = dc
+      .mutate({
+        trial_score: (obs) => {
+          const maxDistance = maxDistanceWithinSquare(
+            obs.square_side_length,
+            obs.presented_dots[obs.location_target_dot_index].location,
+            extras.dotDiameter / 2,
+          );
+
+          return (
+            (((obs.color_selected_correct ? 0.5 : 0) +
+              ((maxDistance - obs.location_selected_delta) / maxDistance) *
+                0.5) /
+              extras.numberOfTrials) *
+            100
+          );
+        },
+      })
+      .summarize({
+        activity_begin_iso8601_timestamp: this.beginIso8601Timestamp,
+        first_trial_begin_iso8601_timestamp: dc
+          .arrange("trial_begin_iso8601_timestamp")
+          .slice(0)
+          .pull("trial_begin_iso8601_timestamp"),
+        last_trial_end_iso8601_timestamp: dc
+          .arrange("-trial_end_iso8601_timestamp")
+          .slice(0)
+          .pull("trial_end_iso8601_timestamp"),
+        n_trials: dc.length,
+        flag_trials_match_expected: dc.length === extras.numberOfTrials ? 1 : 0,
+        participant_score: sum("trial_score"),
+      });
+    return scores.observations;
   }
 }
 
