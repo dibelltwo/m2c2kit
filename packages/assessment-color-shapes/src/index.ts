@@ -18,6 +18,9 @@ import {
   Constants,
   Translation,
   M2Error,
+  ScoringProvider,
+  ActivityKeyValueData,
+  ScoringSchema,
 } from "@m2c2kit/core";
 import {
   Button,
@@ -27,13 +30,14 @@ import {
   InstructionsOptions,
   LocalePicker,
 } from "@m2c2kit/addons";
+import { DataCalc } from "@m2c2kit/data-calc";
 
 /**
  * Color Shapes is a visual array change detection task, measuring intra-item
  * feature binding, where participants determine if shapes change color across
  * two sequential presentations of shape stimuli.
  */
-class ColorShapes extends Game {
+class ColorShapes extends Game implements ScoringProvider {
   constructor() {
     /**
      * These are configurable game parameters and their defaults.
@@ -151,6 +155,11 @@ class ColorShapes extends Game {
         default: null,
         description:
           "Optional seed for the seeded pseudo-random number generator. When null, the default Math.random() is used.",
+      },
+      scoring: {
+        type: "boolean",
+        default: false,
+        description: "Should scoring data be generated? Default is false.",
       },
     };
 
@@ -284,6 +293,49 @@ class ColorShapes extends Game {
       },
     };
 
+    const colorShapesScoringSchema: ScoringSchema = {
+      activity_begin_iso8601_timestamp: {
+        type: "string",
+        format: "date-time",
+        description:
+          "ISO 8601 timestamp at the beginning of the game activity.",
+      },
+      first_trial_begin_iso8601_timestamp: {
+        type: ["string", "null"],
+        format: "date-time",
+        description:
+          "ISO 8601 timestamp at the beginning of the first trial. Null if no trials were completed.",
+      },
+      last_trial_end_iso8601_timestamp: {
+        type: ["string", "null"],
+        format: "date-time",
+        description:
+          "ISO 8601 timestamp at the end of the last trial. Null if no trials were completed.",
+      },
+      n_trials: {
+        type: "integer",
+        description: "Number of trials completed.",
+      },
+      flag_trials_match_expected: {
+        type: "integer",
+        description:
+          "Does the number of completed and expected trials match? 1 = true, 0 = false.",
+      },
+      n_trials_correct: {
+        type: "integer",
+        description: "Number of correct trials.",
+      },
+      n_trials_incorrect: {
+        type: "integer",
+        description: "Number of incorrect trials.",
+      },
+      participant_score: {
+        type: ["number", "null"],
+        description:
+          "Participant-facing score, calculated as (number of correct trials / number of trials attempted) * 100. This is a simple metric to provide feedback to the participant. Null if no trials attempted.",
+      },
+    };
+
     const translation: Translation = {
       configuration: {
         baseLocale: "en-US",
@@ -376,6 +428,7 @@ phases.`,
       width: 400,
       height: 800,
       trialSchema: colorShapesTrialSchema,
+      scoringSchema: colorShapesScoringSchema,
       parameters: defaultParameters,
       fonts: [
         {
@@ -453,6 +506,16 @@ phases.`,
         game.presentScene(blankScene);
         game.addTrialData("quit_button_pressed", true);
         game.trialComplete();
+        if (game.getParameter<boolean>("scoring")) {
+          // Score the data only if user does not quit. If user quits, pass
+          // empty data to calculateScores so a "blank" set of scores is
+          // generated.
+          const scores = game.calculateScores([], {
+            numberOfTrials: game.getParameter<number>("number_of_trials"),
+          });
+          game.addScoringData(scores);
+          game.scoringComplete();
+        }
         game.cancel();
       });
     }
@@ -996,14 +1059,26 @@ phases.`,
       if (game.trialIndex < numberOfTrials) {
         game.presentScene(fixationScene);
       } else {
-        game.presentScene(
-          doneScene,
-          Transition.slide({
-            direction: TransitionDirection.Left,
-            duration: 500,
-            easing: Easings.sinusoidalInOut,
-          }),
-        );
+        if (game.getParameter<boolean>("scoring")) {
+          const scores = game.calculateScores(game.data.trials, {
+            numberOfTrials: game.getParameter<number>("number_of_trials"),
+          });
+          game.addScoringData(scores);
+          game.scoringComplete();
+        }
+
+        if (game.getParameter("show_trials_complete_scene")) {
+          game.presentScene(
+            doneScene,
+            Transition.slide({
+              direction: TransitionDirection.Left,
+              duration: 500,
+              easing: Easings.sinusoidalInOut,
+            }),
+          );
+        } else {
+          game.end();
+        }
       }
     };
 
@@ -1034,6 +1109,39 @@ phases.`,
       // no need to have cancel button, because we're done
       game.removeAllFreeNodes();
     });
+  }
+
+  calculateScores(
+    data: ActivityKeyValueData[],
+    extras: {
+      numberOfTrials: number;
+    },
+  ) {
+    const dc = new DataCalc(data);
+    const scores = dc
+      .summarize({
+        activity_begin_iso8601_timestamp: this.beginIso8601Timestamp,
+        first_trial_begin_iso8601_timestamp: dc
+          .arrange("trial_begin_iso8601_timestamp")
+          .slice(0)
+          .pull("trial_begin_iso8601_timestamp"),
+        last_trial_end_iso8601_timestamp: dc
+          .arrange("-trial_end_iso8601_timestamp")
+          .slice(0)
+          .pull("trial_end_iso8601_timestamp"),
+        n_trials: dc.length,
+        flag_trials_match_expected: dc.length === extras.numberOfTrials ? 1 : 0,
+        n_trials_correct: dc.filter((obs) => obs.user_response_correct === true)
+          .length,
+        n_trials_incorrect: dc.filter(
+          (obs) => obs.user_response_correct === false,
+        ).length,
+      })
+      .mutate({
+        participant_score: (obs) =>
+          obs.n_trials > 0 ? (obs.n_trials_correct / obs.n_trials) * 100 : null,
+      });
+    return scores.observations;
   }
 
   private makeShapes(svgHeight: number) {
