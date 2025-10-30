@@ -1,6 +1,6 @@
 {
   "name": "@m2c2kit/assessment-symbol-search",
-  "version": "0.8.31",
+  "version": "0.8.32",
   "m2c2kit": {
     "assessmentId": "symbol-search",
     "locales": [
@@ -46,14 +46,14 @@
   },
   "homepage": "https://m2c2-project.github.io/m2c2kit",
   "dependencies": {
-    "@m2c2kit/addons": "0.3.32",
-    "@m2c2kit/core": "0.3.33",
-    "@m2c2kit/data-calc": "0.8.4"
+    "@m2c2kit/addons": "0.3.33",
+    "@m2c2kit/core": "0.3.34",
+    "@m2c2kit/data-calc": "0.8.5"
   },
   "devDependencies": {
-    "@m2c2kit/build-helpers": "0.3.29",
-    "@m2c2kit/schema-util": "0.1.23",
-    "@m2c2kit/session": "0.3.15",
+    "@m2c2kit/build-helpers": "0.3.30",
+    "@m2c2kit/schema-util": "0.1.24",
+    "@m2c2kit/session": "0.3.16",
     "@rollup/plugin-node-resolve": "16.0.3",
     "concurrently": "9.2.1",
     "rimraf": "6.0.1",

@@ -4,6 +4,128 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## `@m2c2kit/core` [0.3.34] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/addons` [0.3.33] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/session` [0.3.16] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/physics` [0.1.21] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/data-calc` [0.8.5] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/cli` [0.3.33] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/schematics` [0.1.33] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/embedding` [1.0.27] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/build-helpers` [0.3.30] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/db` [0.3.28] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/survey` [0.3.29] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/schema-util` [0.1.24] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessments-registry` [0.1.13] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessment-symbol-search` [0.8.32] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessment-grid-memory` [0.8.32] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessment-color-shapes` [0.8.32] - 2025-10-30
+
+### Added
+
+- Scoring that has a basic `participant_score`.
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessment-color-dots` [0.8.32] - 2025-10-30
+
+### Added
+
+- Scoring that has a basic `participant_score`.
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessments-demo` [0.8.29] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessment-cli-starter` [0.8.30] - 2025-10-30
+
+### Changed
+
+- Updated dependencies.
+
 ## `@m2c2kit/core` [0.3.33] - 2025-10-09
 
 ### Added
