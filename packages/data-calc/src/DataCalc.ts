@@ -102,7 +102,8 @@ export class DataCalc {
    * Returns a single variable from the data.
    *
    * @remarks If the variable length is 1, the value is returned. If the
-   * variable has length > 1, an array of values is returned.
+   * variable has length > 1, an array of values is returned. If an empty
+   * dataset is provided, `null` is returned and a warning is logged.
    *
    * @param variable - Name of variable to pull from the data
    * @returns the value of the variable

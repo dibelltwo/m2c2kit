@@ -167,18 +167,15 @@ const nInternal: SummarizeFunction = (dataCalc: DataCalc): number => {
  */
 
 export function n(): SummarizeOperation {
-  return {
-    summarizeFunction: nInternal,
-    parameters: [],
-  };
+  return SummarizeOperation.leaf(nInternal, [], undefined);
 }
 
 const sumInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params: Array<DataValue>,
+  params?: Array<DataValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params[0];
+  const variableOrValues = params ? params[0] : undefined;
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -261,19 +258,15 @@ export function sum(
   variableOrValues: string | DataValue | DataValue[],
   options?: SummarizeOptions,
 ): SummarizeOperation {
-  return {
-    summarizeFunction: sumInternal,
-    parameters: [variableOrValues],
-    options: options,
-  };
+  return SummarizeOperation.leaf(sumInternal, [variableOrValues], options);
 }
 
 const meanInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params: Array<DataValue>,
+  params?: Array<DataValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params[0];
+  const variableOrValues = params ? params[0] : undefined;
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -350,19 +343,15 @@ export function mean(
   variableOrValues: string | DataValue | DataValue[],
   options?: SummarizeOptions,
 ): SummarizeOperation {
-  return {
-    summarizeFunction: meanInternal,
-    parameters: [variableOrValues],
-    options: options,
-  };
+  return SummarizeOperation.leaf(meanInternal, [variableOrValues], options);
 }
 
 const varianceInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params: Array<DataValue>,
+  params?: Array<DataValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params[0];
+  const variableOrValues = params ? params[0] : undefined;
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -486,19 +475,15 @@ export function variance(
   variableOrValues: string | DataValue | DataValue[],
   options?: SummarizeOptions,
 ): SummarizeOperation {
-  return {
-    summarizeFunction: varianceInternal,
-    parameters: [variableOrValues],
-    options: options,
-  };
+  return SummarizeOperation.leaf(varianceInternal, [variableOrValues], options);
 }
 
 const minInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params: Array<DataValue>,
+  params?: Array<DataValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params[0];
+  const variableOrValues = params ? params[0] : undefined;
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -584,19 +569,15 @@ export function min(
   variableOrValues: string | DataValue | DataValue[],
   options?: SummarizeOptions,
 ): SummarizeOperation {
-  return {
-    summarizeFunction: minInternal,
-    parameters: [variableOrValues],
-    options: options,
-  };
+  return SummarizeOperation.leaf(minInternal, [variableOrValues], options);
 }
 
 const maxInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params: Array<DataValue>,
+  params?: Array<DataValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params[0];
+  const variableOrValues = params ? params[0] : undefined;
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -682,19 +663,15 @@ export function max(
   variableOrValues: string | DataValue | DataValue[],
   options?: SummarizeOptions,
 ): SummarizeOperation {
-  return {
-    summarizeFunction: maxInternal,
-    parameters: [variableOrValues],
-    options: options,
-  };
+  return SummarizeOperation.leaf(maxInternal, [variableOrValues], options);
 }
 
 const medianInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params: Array<DataValue>,
+  params?: Array<DataValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params[0];
+  const variableOrValues = params ? params[0] : undefined;
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -818,19 +795,15 @@ export function median(
   variableOrValues: string | DataValue | DataValue[],
   options?: SummarizeOptions,
 ): SummarizeOperation {
-  return {
-    summarizeFunction: medianInternal,
-    parameters: [variableOrValues],
-    options: options,
-  };
+  return SummarizeOperation.leaf(medianInternal, [variableOrValues], options);
 }
 
 const sdInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params: Array<DataValue>,
+  params?: Array<DataValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params[0];
+  const variableOrValues = params ? params[0] : undefined;
 
   if (typeof variableOrValues === "string") {
     if (!dataCalc.variableExists(variableOrValues)) {
@@ -847,7 +820,7 @@ const sdInternal: SummarizeFunction = (
     return Math.sqrt(varianceValue as number);
   } else if (Array.isArray(variableOrValues)) {
     // Modify params to pass to varianceInternal
-    const newParams = [...params];
+    const newParams = params ? [...params] : [variableOrValues];
 
     // Reuse the variance calculation and take the square root
     const varianceValue = varianceInternal(dataCalc, newParams, options);
@@ -894,9 +867,63 @@ export function sd(
   variableOrValues: string | DataValue | DataValue[],
   options?: SummarizeOptions,
 ): SummarizeOperation {
-  return {
-    summarizeFunction: sdInternal,
-    parameters: [variableOrValues],
-    options: options,
-  };
+  return SummarizeOperation.leaf(sdInternal, [variableOrValues], options);
 }
+
+/**
+ * Scalar / identity helper: wrap a numeric (or boolean) literal as a SummarizeOperation
+ * so it can participate in expression chaining (e.g. s(10).mul(mean('a')) ).
+ */
+const scalarInternal: SummarizeFunction = (
+  _dataCalc: DataCalc,
+  params?: Array<DataValue>,
+  options?: SummarizeOptions,
+): DataValue => {
+  const v = params ? params[0] : undefined;
+  // Reuse processSingleValue to ensure consistent coercion and missing handling
+  const result = processSingleValue(v, options, "scalar()");
+  return result.isMissing ? null : result.value;
+};
+
+/**
+ * Wraps a scalar literal as a `SummarizeOperation` so it can participate in
+ * expression chaining with other summarize operations.
+ *
+ * @remarks Accepted inputs:
+ * - number: returned as-is
+ * - boolean: coerced to 1 (true) or 0 (false)
+ * - null/undefined: treated as a missing value and yields `null` when
+ *   evaluated in a summarize context
+ *
+ * `s` is provided as a shorthand alias for `scalar`.
+ *
+ * @example
+ * ```js
+ * const d = [
+ *   { a: 1, b: 2, c: 3 },
+ *   { a: 0, b: 8, c: 3 },
+ *   { a: 9, b: 4, c: 7 },
+ * ];
+ * const dc = new DataCalc(d);
+ * console.log(
+ *   dc.summarize({
+ *     meanA: scalar(10).mul(mean("a")),
+ *     meanA2: s(10).mul(mean("a")),
+ *   }).observations
+ * );
+ * // [ { meanA: 33.3333, meanA2: 33.3333 } ]
+ * ```
+ */
+export function scalar(
+  value: number | boolean | null | undefined,
+): SummarizeOperation {
+  return SummarizeOperation.leaf(scalarInternal, [value], undefined);
+}
+
+// short alias for convenience
+export const s = scalar;
+
+// Re-export parens() from SummarizeOperation.ts. Users can import it from
+// the same module as other summarize methods here to improve discoverability
+// without moving the implementation and risking circular imports.
+export { parens } from "./SummarizeOperation";

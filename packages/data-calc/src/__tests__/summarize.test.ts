@@ -9,6 +9,9 @@ import {
   min,
   sd,
   n,
+  parens,
+  scalar,
+  s,
 } from "../SummarizeOperations";
 
 let d: Array<Observation>;
@@ -187,5 +190,198 @@ describe("summarize tests", () => {
       .summarize({ overallMean: mean("meanC") });
 
     expect(result.observations).toEqual([{ overallMean: 4.375 }]); // Mean of [2.5, 1, 3, 11]
+  });
+});
+
+describe("Summarize expression precedence and parens()", () => {
+  test("multiplication has higher precedence than addition in chained expressions", () => {
+    const d = [{ a: 1 }, { a: 5 }, { a: 4 }]; // mean = 10/3 ≈ 3.3333333
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({
+      // mean + (5 * 10) => ≈ 3.3333 + 50 = 53.3333...
+      val: mean("a").add(5).mul(10),
+    });
+
+    expect(result.pull("val")).toBeCloseTo(53.3333333333, 8);
+  });
+
+  test("parens() forces explicit grouping", () => {
+    const d = [{ a: 1 }, { a: 5 }, { a: 4 }]; // mean ≈ 3.3333
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({
+      // (mean + 5) * 10 => (3.3333 + 5) * 10 = 83.3333...
+      val: parens(mean("a").add(5)).mul(10),
+    });
+
+    expect(result.pull("val")).toBeCloseTo(83.3333333333, 8);
+  });
+
+  test("two summary operations", () => {
+    const d = [
+      { a: 1, b: 0 },
+      { a: 5, b: 2 },
+      { a: 4, b: 3 },
+    ];
+    // mean a = 10/3 ≈ 3.3333333
+    // mean b = 5/3 ≈ 1.6666667
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({
+      // mean a + mean b = 5
+      val: mean("a").add(mean("b")),
+    });
+
+    expect(result.pull("val")).toBeCloseTo(5);
+  });
+
+  test("two summary operations and operator precedence", () => {
+    const d = [
+      { a: 1, b: 0 },
+      { a: 5, b: 2 },
+      { a: 4, b: 3 },
+    ];
+    // mean a = 10/3 ≈ 3.3333333
+    // mean b = 5/3 ≈ 1.6666667
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({
+      // mean a + mean b * 10 = 20
+      val: mean("a").add(mean("b")).mul(10),
+    });
+
+    expect(result.pull("val")).toBeCloseTo(20);
+  });
+
+  test("two different summary operations and parentheses", () => {
+    const d = [
+      { a: 1, b: 0 },
+      { a: 5, b: 2 },
+      { a: 4, b: 3 },
+    ];
+    // mean a = 10/3 ≈ 3.3333333
+    // min b = 0
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({
+      // (mean a + min b) * 10 = 33.3333...
+      val: parens(mean("a").add(min("b"))).mul(10),
+    });
+
+    expect(result.pull("val")).toBeCloseTo(33.333);
+  });
+
+  test("complex precedence example", () => {
+    const dc = new DataCalc([{ a: 1 }, { a: 2 }]); // mean = 1.5
+    // mean + 2 * scalar(3) ^ 2 => 1.5 + 2*(9) = 19.5
+    const expr = mean("a").add(scalar(2).mul(scalar(3).pow(2)));
+    expect(dc.summarize({ val: expr }).pull("val")).toBeCloseTo(19.5);
+  });
+
+  test("divide by zero returns null", () => {
+    const d = [
+      { a: 1, b: 0 },
+      { a: 5, b: 2 },
+      { a: 4, b: 3 },
+    ];
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({
+      val: mean("a").div(0),
+    });
+
+    expect(result.pull("val")).toBeNull();
+  });
+
+  test("pow is right-associative", () => {
+    const dc = new DataCalc([{}]);
+
+    // 2^(3^2) = 2^9 = 512; ensure pow is right-associative
+    const result = dc.summarize({ val: scalar(2).pow(3).pow(2) });
+
+    expect(result.pull("val")).toBeCloseTo(512);
+  });
+
+  test("expression NaN -> null", () => {
+    const d = [{ a: 1 }, { a: 2 }];
+    const dc = new DataCalc(d);
+
+    // add a NaN literal into the expression; final result should be normalized to null
+    const result = dc.summarize({ val: mean("a").add(scalar(NaN)) });
+
+    expect(result.pull("val")).toBeNull();
+  });
+
+  test("mid-expression NaN propagates to null final", () => {
+    const dc = new DataCalc([
+      { a: 1, b: 0 },
+      { a: 2, b: 0 },
+    ]);
+    const expr = mean("a").sub(mean("a")).div(mean("b")).mul(scalar(5));
+
+    expect(dc.summarize({ val: expr }).pull("val")).toBeNull();
+  });
+});
+
+describe("scalar helper scalar()/s()", () => {
+  test("scalar first: scalar(10).mul(mean('a'))", () => {
+    const d = [{ a: 1 }, { a: 5 }, { a: 4 }]; // mean = 10/3
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({ val: scalar(10).mul(mean("a")) });
+    // expect 10 * mean = 10 * 10/3 = 100/3 ≈ 33.3333
+    expect(result.pull("val")).toBeCloseTo(100 / 3, 8);
+  });
+
+  test("scalar second: mean('a').mul(scalar(10))", () => {
+    const d = [{ a: 1 }, { a: 5 }, { a: 4 }];
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({ val: mean("a").mul(scalar(10)) });
+    expect(result.pull("val")).toBeCloseTo(100 / 3, 8);
+  });
+
+  test("alias s() works like scalar()", () => {
+    const d = [{ a: 2 }, { a: 4 }]; // mean = 3
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({ val: s(5).mul(mean("a")) });
+    // 5 * 3 = 15
+    expect(result.pull("val")).toBeCloseTo(15);
+  });
+
+  test("boolean coercion: scalar(true) coerces to 1 by default", () => {
+    const d = [{ a: 1 }, { a: 2 }];
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({ val: scalar(true).mul(mean("a")) });
+    // mean = 1.5, 1 * 1.5 = 1.5
+    expect(result.pull("val")).toBeCloseTo(1.5);
+  });
+
+  test("boolean coercion: scalar(true) throws if coerceBooleans is false", () => {
+    const d = [{ a: 1 }, { a: 2 }];
+    const dc = new DataCalc(d);
+
+    // SummarizeOperation stores options on the operation; DataCalc.summarize passes them through
+    const op = scalar(true);
+    op.options = { coerceBooleans: false };
+
+    expect(() => dc.summarize({ val: op })).toThrow();
+  });
+
+  test("scalar(null) yields null", () => {
+    const d = [{ a: 1 }];
+    const dc = new DataCalc(d);
+
+    const result = dc.summarize({ val: scalar(null).mul(mean("a")) });
+    expect(result.pull("val")).toBeNull();
+  });
+
+  test("scalar with numeric string throws", () => {
+    const dc = new DataCalc([{ a: 1 }]);
+    // @ts-expect-error: testing runtime behavior with incorrect type
+    expect(() => dc.summarize({ val: scalar("3") })).toThrow();
   });
 });
