@@ -2,7 +2,7 @@
 /**
  * The code in this file is adapted from a reference CLI implementation from
  * the Angular devkit repository:
- *   https://github.com/angular/angular-cli/blob/1c2d49ec736818d22773916d7eaafd3446275ea0/packages/angular_devkit/schematics_cli/bin/schematics.ts
+ *   https://github.com/angular/angular-cli/blob/1eda0a99f89f625f8db1ecfe4873a7672e625401/packages/angular_devkit/schematics_cli/bin/schematics.ts
  * The license for that code is as follows:
  * @license
  * Copyright Google LLC All Rights Reserved.
@@ -13,12 +13,15 @@
 
 import { JsonValue, logging, schema } from "@angular-devkit/core";
 import { ProcessOutput, createConsoleLogger } from "@angular-devkit/core/node";
-import { UnsuccessfulWorkflowExecution } from "@angular-devkit/schematics";
+import {
+  UnsuccessfulWorkflowExecution,
+  strings,
+} from "@angular-devkit/schematics";
 import { NodeWorkflow } from "@angular-devkit/schematics/tools";
 import ansiColors from "ansi-colors";
 import { existsSync } from "node:fs";
 import * as path from "node:path";
-import yargsParser, { camelCase, decamelize } from "yargs-parser";
+import { parseArgs, styleText } from "node:util";
 
 /**
  * Parse the name of schematic passed in argument, and return a {collection, schematic} named
@@ -239,18 +242,15 @@ export async function main({
   stdout = process.stdout,
   stderr = process.stderr,
 }: MainOptions): Promise<0 | 1> {
-  const { cliOptions, schematicOptions, _ } = parseArgs(args);
-
-  // Create a separate instance to prevent unintended global changes to the color configuration
-  const colors = ansiColors.create();
+  const { cliOptions, schematicOptions, _ } = parseOptions(args);
 
   /** Create the DevKit Logger used through the CLI. */
   const logger = createConsoleLogger(!!cliOptions.verbose, stdout, stderr, {
     info: (s) => s,
     debug: (s) => s,
-    warn: (s) => colors.bold.yellow(s),
-    error: (s) => colors.bold.red(s),
-    fatal: (s) => colors.bold.red(s),
+    warn: (s) => styleText(["bold", "yellow"], s),
+    error: (s) => styleText(["bold", "red"], s),
+    fatal: (s) => styleText(["bold", "red"], s),
   });
 
   if (cliOptions.help) {
@@ -267,10 +267,9 @@ export async function main({
     collectionName.startsWith(".") || collectionName.startsWith("/");
 
   /** Gather the arguments for later use. */
-  const debugPresent = cliOptions.debug !== null;
-  const debug = debugPresent ? !!cliOptions.debug : isLocalCollection;
-  const dryRunPresent = cliOptions["dry-run"] !== null;
-  const dryRun = dryRunPresent ? !!cliOptions["dry-run"] : debug;
+  const debug = cliOptions.debug ?? isLocalCollection;
+  const dryRunPresent = cliOptions["dry-run"] != null;
+  const dryRun = cliOptions["dry-run"] ?? debug;
   const force = !!cliOptions.force;
   const allowPrivate = !!cliOptions["allow-private"];
 
@@ -334,21 +333,21 @@ export async function main({
       case "update":
         loggingQueue.push(
           // TODO: `as unknown` was necessary during TS 5.9 update. Figure out a long-term solution.
-          `${colors.cyan("UPDATE")} ${eventPath} (${(event.content as unknown as Buffer).length} bytes)`,
+          `${styleText(["cyan"], "UPDATE")} ${eventPath} (${(event.content as unknown as Buffer).length} bytes)`,
         );
         break;
       case "create":
         loggingQueue.push(
           // TODO: `as unknown` was necessary during TS 5.9 update. Figure out a long-term solution.
-          `${colors.green("CREATE")} ${eventPath} (${(event.content as unknown as Buffer).length} bytes)`,
+          `${styleText(["green"], "CREATE")} ${eventPath} (${(event.content as unknown as Buffer).length} bytes)`,
         );
         break;
       case "delete":
-        loggingQueue.push(`${colors.yellow("DELETE")} ${eventPath}`);
+        loggingQueue.push(`${styleText(["yellow"], "DELETE")} ${eventPath}`);
         break;
       case "rename":
         loggingQueue.push(
-          `${colors.blue("RENAME")} ${eventPath} => ${removeLeadingSlash(event.to)}`,
+          `${styleText(["blue"], "RENAME")} ${eventPath} => ${removeLeadingSlash(event.to)}`,
         );
         break;
     }
@@ -455,71 +454,106 @@ ${colors.blue("Commands:")}
 `;
 }
 
-/** Parse the command line. */
-const booleanArgs = [
-  "allow-private",
-  "debug",
-  "dry-run",
-  "force",
-  "help",
-  "list-schematics",
-  "verbose",
-  "interactive",
-] as const;
-
-type ElementType<T extends ReadonlyArray<unknown>> =
-  T extends ReadonlyArray<infer ElementType> ? ElementType : never;
+const CLI_OPTION_DEFINITIONS = {
+  "allow-private": { type: "boolean" },
+  debug: { type: "boolean" },
+  "dry-run": { type: "boolean" },
+  force: { type: "boolean" },
+  help: { type: "boolean" },
+  "list-schematics": { type: "boolean" },
+  verbose: { type: "boolean" },
+  interactive: { type: "boolean", default: true },
+} as const;
 
 interface Options {
   _: string[];
   schematicOptions: Record<string, unknown>;
-  cliOptions: Partial<Record<ElementType<typeof booleanArgs>, boolean | null>>;
+  cliOptions: Partial<Record<keyof typeof CLI_OPTION_DEFINITIONS, boolean>>;
 }
 
 /** Parse the command line. */
-function parseArgs(args: string[]): Options {
-  const { _, ...options } = yargsParser(args, {
-    boolean: booleanArgs as unknown as string[],
-    default: {
-      interactive: true,
-      debug: null,
-      "dry-run": null,
-    },
-    configuration: {
-      "dot-notation": false,
-      "boolean-negation": true,
-      "strip-aliased": true,
-      "camel-case-expansion": false,
-    },
+
+function parseOptions(args: string[]): Options {
+  const { values, tokens } = parseArgs({
+    args,
+    strict: false,
+    tokens: true,
+    allowPositionals: true,
+    allowNegative: true,
+    options: CLI_OPTION_DEFINITIONS,
   });
 
-  // Camelize options as yargs will return the object in kebab-case when camel casing is disabled.
   const schematicOptions: Options["schematicOptions"] = {};
-  const cliOptions: Options["cliOptions"] = {};
+  const positionals: string[] = [];
 
-  const isCliOptions = (
-    key: ElementType<typeof booleanArgs> | string,
-  ): key is ElementType<typeof booleanArgs> =>
-    booleanArgs.includes(key as ElementType<typeof booleanArgs>);
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
 
-  for (const [key, value] of Object.entries(options)) {
-    if (/[A-Z]/.test(key)) {
+    if (token.kind === "positional") {
+      positionals.push(token.value);
+      continue;
+    }
+
+    if (token.kind !== "option") {
+      continue;
+    }
+
+    const name = token.name;
+    let value: string | number | boolean = token.value ?? true;
+
+    // `parseArgs` already handled known boolean args and their --no- forms.
+    // Only process options not in CLI_OPTION_DEFINITIONS here.
+    if (name in CLI_OPTION_DEFINITIONS) {
+      continue;
+    }
+
+    if (/[A-Z]/.test(name)) {
       throw new Error(
-        `Unknown argument ${key}. Did you mean ${decamelize(key)}?`,
+        `Unknown argument ${name}. Did you mean ${strings.decamelize(name).replace(/_/g, "-")}?`,
       );
     }
 
-    if (isCliOptions(key)) {
-      cliOptions[key] = value;
+    // Handle --no-flag for unknown options, treating it as false
+    if (name.startsWith("no-")) {
+      const realName = name.slice(3);
+      schematicOptions[strings.camelize(realName)] = false;
+      continue;
+    }
+
+    // Handle value for unknown options
+    if (token.inlineValue === undefined) {
+      // Look ahead
+      const nextToken = tokens[i + 1];
+      if (nextToken?.kind === "positional") {
+        value = nextToken.value;
+        i++; // Consume next token
+      } else {
+        value = true; // Treat as boolean if no value follows
+      }
+    }
+
+    // Type inference for numbers
+    if (typeof value === "string" && !isNaN(Number(value))) {
+      value = Number(value);
+    }
+
+    const camelName = strings.camelize(name);
+    if (Object.prototype.hasOwnProperty.call(schematicOptions, camelName)) {
+      const existing = schematicOptions[camelName];
+      if (Array.isArray(existing)) {
+        existing.push(value);
+      } else {
+        schematicOptions[camelName] = [existing, value];
+      }
     } else {
-      schematicOptions[camelCase(key)] = value;
+      schematicOptions[camelName] = value;
     }
   }
 
   return {
-    _: _.map((v) => v.toString()),
+    _: positionals,
     schematicOptions,
-    cliOptions,
+    cliOptions: values as Options["cliOptions"],
   };
 }
 
