@@ -350,7 +350,7 @@ class GridMemory extends Game implements ScoringProvider {
           "Sum of the number of exact targets across all trials. An exact target is a target that was selected in the correct location.",
       },
       percent_exact_targets: {
-        type: "number",
+        type: ["number", "null"],
         description:
           "Percent of exact targets out of all targets across all trials. An exact target is a target that was selected in the correct location.",
       },
