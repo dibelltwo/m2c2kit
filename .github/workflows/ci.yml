@@ -8,10 +8,9 @@ on:
   # Allows running workflow manually from Actions tab
   workflow_dispatch:
 
-# Sets permissions of the GITHUB_TOKEN to allow deployment to GitHub Pages
+# Allows reading repo contents and writing OIDC tokens
 permissions:
   contents: read
-  pages: write
   id-token: write
 
 concurrency:
@@ -25,10 +24,6 @@ jobs:
     env:
       # Fixes JS out of memory error; see https://github.com/actions/runner-images/issues/70
       NODE_OPTIONS: "--max_old_space_size=4096"
-      # The base url in GitHub Pages where the docs will be deployed is typically the repo name
-      DOCS_BASE_URL: m2c2kit
-      # Use GitHub secrets to get token to authenticate with the public registry. Token must have publish access.
-      NPM_TOKEN: ${{ secrets.NPM_TOKEN }}
       # URL of the registry where public packages will be published. For npm, the URL is https://registry.npmjs.org
       PUBLIC_REGISTRY_URL: https://registry.npmjs.org
       # Use GitHub secrets to get token to authenticate with the organization npm-compatible registry. Token must have publish access.
@@ -39,20 +34,14 @@ jobs:
       ORG_NAME: "@m2c2-project"
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
-      - name: Set up docker compose
-        uses: KengoTODA/actions-setup-docker-compose@v1
-        with:
-          version: "2.23.0"
+        uses: actions/checkout@v6
       - name: Set up Node.js
-        uses: actions/setup-node@v4
+        uses: actions/setup-node@v6
         with:
-          node-version: 22.x
+          node-version: 24.x
           cache: npm
-      # Configure .npmrc for public and organization registry
-      # To set auth token for a registry, registry needs to be in the format of //registry.npmjs.org/:_authToken=...
-      - run: npm config set registry $PUBLIC_REGISTRY_URL
-      - run: 'npm config set $(echo $PUBLIC_REGISTRY_URL | awk -v TOKEN=$NPM_TOKEN -F[/:] ''{ print "//" $4 "/:_authToken=" TOKEN}'')'
+      # Configure .npmrc for organization registry
+      # To set auth token for a registry, registry needs to be in the format of //registry.org/:_authToken=...
       - run: npm config set $(echo $ORG_NAME:registry) $ORG_REGISTRY_URL
       - run: 'npm config set $(echo $ORG_REGISTRY_URL | awk -v TOKEN=$ORG_NPM_TOKEN -F[/:] ''{ print "//" $4 "/:_authToken=" TOKEN}'')'
       - name: Install dependencies
