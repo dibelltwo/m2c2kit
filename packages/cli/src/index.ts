@@ -2,7 +2,7 @@
 /**
  * The code in this file is adapted from a reference CLI implementation from
  * the Angular devkit repository:
- *   https://github.com/angular/angular-cli/blob/1eda0a99f89f625f8db1ecfe4873a7672e625401/packages/angular_devkit/schematics_cli/bin/schematics.ts
+ *   https://github.com/angular/angular-cli/blob/630584ebbbbdedf0ac7b8768302af7ea87b1703f/packages/angular_devkit/schematics_cli/bin/schematics.ts
  * The license for that code is as follows:
  * @license
  * Copyright Google LLC All Rights Reserved.
@@ -198,21 +198,23 @@ function _createPromptProvider(): schema.PromptProvider {
 }
 
 function findUp(names: string | string[], from: string) {
-  if (!Array.isArray(names)) {
-    names = [names];
-  }
-  const root = path.parse(from).root;
+  const filenames = Array.isArray(names) ? names : [names];
 
-  let currentDir = from;
-  while (currentDir && currentDir !== root) {
-    for (const name of names) {
+  let currentDir = path.resolve(from);
+  while (true) {
+    for (const name of filenames) {
       const p = path.join(currentDir, name);
       if (existsSync(p)) {
         return p;
       }
     }
 
-    currentDir = path.dirname(currentDir);
+    const parentDir = path.dirname(currentDir);
+    if (parentDir === currentDir) {
+      break;
+    }
+
+    currentDir = parentDir;
   }
 
   return null;
