@@ -27,7 +27,7 @@
     "@rollup/plugin-node-resolve": "16.0.3",
     "@types/matter-js": "0.20.2",
     "rimraf": "6.1.2",
-    "rollup": "4.55.3",
+    "rollup": "4.56.0",
     "rollup-plugin-copy": "3.5.0",
     "rollup-plugin-dts": "6.3.0",
     "rollup-plugin-esbuild": "6.2.1",

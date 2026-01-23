@@ -1,9 +1,3 @@
-declare global {
-  // Must be var to be in the global scope
-  // eslint-disable-next-line no-var
-  var m2c2Globals: GlobalVariables;
-}
-
 export interface GlobalVariables {
   now: number;
   iso8601Now: string;

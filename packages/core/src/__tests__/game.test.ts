@@ -1,3 +1,4 @@
+/// <reference path="./global-augmentation.d.ts" />
 import { TestHelpers } from "./TestHelpers";
 import {
   Game,
