@@ -2,6 +2,13 @@ import { M2Error } from "./M2Error";
 
 // eslint-disable-next-line @typescript-eslint/no-extraneous-class
 export class RandomDraws {
+  /** Number of milliseconds before a warning is logged if sampling takes too long. Tuneable for tests. */
+  public static samplingWarnMs = 1000;
+  /** Number of milliseconds before sampling times out. Tuneable for tests or legitimate edge use cases. */
+  public static samplingTimeoutMs = 5000;
+  /** Number of loop iterations between checks. Tuneable for tests. */
+  public static samplingCheckInterval = 4096;
+
   private static randomFunction: () => number = Math.random;
   private static seededPRNG: (() => number) | null = null;
 
@@ -192,8 +199,12 @@ export class RandomDraws {
     const maximumInclusive = rows * columns - 1;
     const draws = this.fromRangeWithoutReplacement(n, 0, maximumInclusive);
 
-    // TODO: add some code to check if we're stuck in infinite loop, such as
-    // when impossible predicate or more draws requested than is possible
+    // Start a timer and a lightweight throttled check and warn/throw if sampling is
+    // taking a long time.
+    const start = Date.now();
+    let warned = false;
+    let loopCounter = 0;
+
     let i = 0;
     let replacementCell = NaN;
     while (i < n) {
@@ -211,6 +222,22 @@ export class RandomDraws {
           )[0];
         } while (draws.includes(replacementCell));
         draws[i] = replacementCell;
+      }
+
+      // check timer periodically to limit overhead; interval is tunable.
+      if (++loopCounter % this.samplingCheckInterval === 0) {
+        const elapsed = Date.now() - start;
+        if (!warned && elapsed > this.samplingWarnMs) {
+          console.warn(
+            `RandomDraws.fromGridWithoutReplacement(): sampling exceeded ${this.samplingWarnMs} ms; predicate may be impossible or expensive.`,
+          );
+          warned = true;
+        }
+        if (elapsed > this.samplingTimeoutMs) {
+          throw new M2Error(
+            `RandomDraws.fromGridWithoutReplacement(): sampling exceeded timeout of ${this.samplingTimeoutMs} ms; predicate may be impossible or expensive.`,
+          );
+        }
       }
     }
     return result;
