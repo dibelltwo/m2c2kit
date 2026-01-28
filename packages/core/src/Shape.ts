@@ -330,6 +330,12 @@ export class Shape extends M2Node implements IDrawable, ShapeOptions {
   }
 
   dispose(): void {
+    // Build an explicit array of colorful path paints
+    const colorfulPathPaintsToDispose: Paint[] = [];
+    for (const p of this.colorfulPathPaints.values()) {
+      colorfulPathPaintsToDispose.push(p);
+    }
+
     CanvasKitHelpers.Dispose([
       // use backing fields, since paints may be undefined
       this._strokeColorPaintAntialiased,
@@ -337,7 +343,12 @@ export class Shape extends M2Node implements IDrawable, ShapeOptions {
       this._fillColorPaintAntialiased,
       this._fillColorPaintNotAntialiased,
       this.ckPath,
-      ...Array.from(this.colorfulPathPaints.values()),
+      // Originally, below was `...Array.from(this.colorfulPathPaints.values())`.
+      // I changed the approach because one of our execution environments
+      // (Qualtrics) is using a library that pollutes the global namespace and
+      // adds a broken implementation of `Array.from()` that does not work with
+      // iterables.
+      ...colorfulPathPaintsToDispose,
     ]);
   }
 

@@ -144,7 +144,11 @@ export class RandomDraws {
       }
     }
 
-    return Array.from(selected);
+    // Originally, the below was `return Array.from(selected)`. I changed to
+    // the below because one of our execution environments (Qualtrics) is using
+    // a library that pollutes the global namespace and adds a broken
+    // implementation of `Array.from()` that does not work with Sets.
+    return [...selected];
   }
 
   /**
