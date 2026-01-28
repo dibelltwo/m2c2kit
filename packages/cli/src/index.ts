@@ -2,7 +2,7 @@
 /**
  * The code in this file is adapted from a reference CLI implementation from
  * the Angular devkit repository:
- *   https://github.com/angular/angular-cli/blob/630584ebbbbdedf0ac7b8768302af7ea87b1703f/packages/angular_devkit/schematics_cli/bin/schematics.ts
+ *   https://github.com/angular/angular-cli/blob/91b9d281fc88a242aa6e5dd5495e275990d926ef/packages/angular_devkit/schematics_cli/bin/schematics.ts
  * The license for that code is as follows:
  * @license
  * Copyright Google LLC All Rights Reserved.
@@ -534,9 +534,16 @@ function parseOptions(args: string[]): Options {
       }
     }
 
-    // Type inference for numbers
-    if (typeof value === "string" && !isNaN(Number(value))) {
-      value = Number(value);
+    if (typeof value === "string") {
+      if (!isNaN(Number(value))) {
+        // Type inference for numbers
+        value = Number(value);
+      } else if (value === "true") {
+        // Type inference for booleans
+        value = true;
+      } else if (value === "false") {
+        value = false;
+      }
     }
 
     const camelName = strings.camelize(name);

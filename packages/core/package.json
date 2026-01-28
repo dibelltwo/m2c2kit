@@ -41,7 +41,7 @@
     "del-cli": "7.0.0",
     "findup-sync": "5.0.0",
     "rimraf": "6.1.2",
-    "rollup": "4.56.0",
+    "rollup": "4.57.0",
     "rollup-plugin-copy": "3.5.0",
     "rollup-plugin-dts": "6.3.0",
     "rollup-plugin-esbuild": "6.2.1",
