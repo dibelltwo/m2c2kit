@@ -1,4 +1,4 @@
-# Build/test/publish packages to registries and docs to GitHub Pages
+# Build/test/publish packages to registries
 name: CI/CD
 
 on:
@@ -8,10 +8,11 @@ on:
   # Allows running workflow manually from Actions tab
   workflow_dispatch:
 
-# Allows reading repo contents and writing OIDC tokens
+# Allows reading repo contents, writing OIDC tokens, and writing code analysis events
 permissions:
   contents: read
   id-token: write
+  security-events: write
 
 concurrency:
   group: "publish"
@@ -20,7 +21,7 @@ concurrency:
 jobs:
   publish:
     runs-on: ubuntu-latest
-    timeout-minutes: 30
+    timeout-minutes: 45
     env:
       # Fixes JS out of memory error; see https://github.com/actions/runner-images/issues/70
       NODE_OPTIONS: "--max_old_space_size=4096"
@@ -38,11 +39,34 @@ jobs:
           cache: npm
       - name: Install dependencies
         run: npm ci
+      - name: Initialize CodeQL
+        uses: github/codeql-action/init@v4
+        with:
+          languages: javascript-typescript
+          queries: security-and-quality
+          config: |
+            paths-ignore:
+              - '**/node_modules/**'
+              - '**/dist/**'
+              - '**/dist-webview/**'
+              - '**/build/**'
+              - '**/test/**'
+              - '**/assets/**'
+              - '**/coverage/**'
+              - 'docs/**'
+              - 'scripts/**'
+              # schematics js build artifacts are placed alongside ts files; ignore them
+              - 'packages/schematics/src/**/**.js'
+              - 'examples/no-js-bundler-development/modules/**'
+              - 'examples/android-simple-webview/**'
+              - 'examples/ios-simple-webview/**'
       # See repo root Dockerfile for why this step is needed only when running in a container, like in GitHub Actions
       - name: Build and install @m2c2kit/schema-util
         run: npm run build -w @m2c2kit/schema-util && npm install -E -D @m2c2kit/schema-util
       - name: Build
         run: npm run build
+      - name: Perform CodeQL Analysis
+        uses: github/codeql-action/analyze@v4
       # No need to run tests here because they will be run as part of the "Integration test" next step (see repo root Dockerfile, "RUN npm test")
       # - name: Test
       #   run: npm run test
