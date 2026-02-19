@@ -43,7 +43,7 @@ export class Constants {
   };
   public static readonly DEFAULT_ROOT_ELEMENT_ID = "m2c2kit";
   public static readonly ERUDA_URL =
-    "https://cdn.jsdelivr.net/npm/eruda@3.4.1/eruda.js";
+    "https://cdn.jsdelivr.net/npm/eruda@3.4.3/eruda.js";
   public static readonly ERUDA_SRI =
-    "sha384-daS5bEfWdSq146t9c4BureB/fQWO3lHohseXBelPqKvbOUx2D6PE3TxcQ9jrKZDM";
+    "sha384-weDBY9jeIj4NqaiZF9f6PMAMMY4lIu+0CAI+TjBIE73RctCQOxDoEHltYnstRszI";
 }
