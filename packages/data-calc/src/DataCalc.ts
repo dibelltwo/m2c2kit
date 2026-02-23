@@ -8,6 +8,7 @@ import { SummarizeOperation } from "./SummarizeOperation";
 export class DataCalc {
   private _observations: Array<Observation>;
   private _groups = new Array<string>();
+  private _warnings = false;
 
   /**
    * A class for transformation and calculation of m2c2kit data.
@@ -72,6 +73,9 @@ export class DataCalc {
     if (options?.groups) {
       this._groups = Array.from(options.groups);
     }
+    if (options?.warnings) {
+      this._warnings = true;
+    }
   }
 
   /**
@@ -122,9 +126,11 @@ export class DataCalc {
       // Instead of throwing an error, we return null and log a warning. When
       // filtering datasets, it is common to end up with no observations. Thus,
       // throwing an error would be too disruptive.
-      console.warn(
-        `DataCalc.pull(): No observations available to pull variable "${variable}" from. Returning null.`,
-      );
+      if (this._warnings) {
+        console.warn(
+          `DataCalc.pull(): No observations available to pull variable "${variable}" from. Returning null.`,
+        );
+      }
       return null;
     }
     this.verifyObservationsContainVariable(variable);
@@ -187,7 +193,7 @@ export class DataCalc {
       this._observations.filter(
         predicate as (observation: Observation) => boolean,
       ),
-      { groups: this._groups },
+      { groups: this._groups, warnings: this._warnings },
     );
   }
 
@@ -273,7 +279,10 @@ export class DataCalc {
       }
       return newObservation;
     });
-    return new DataCalc(newObservations, { groups: this._groups });
+    return new DataCalc(newObservations, {
+      groups: this._groups,
+      warnings: this._warnings,
+    });
   }
 
   /**
@@ -336,7 +345,10 @@ export class DataCalc {
           obs[newVariable] = value;
         }
       }
-      return new DataCalc([obs], { groups: this._groups });
+      return new DataCalc([obs], {
+        groups: this._groups,
+        warnings: this._warnings,
+      });
     }
 
     // Optimized implementation of groupBy summarization
@@ -426,7 +438,10 @@ export class DataCalc {
       summarizedObservations.push(summaryObj);
     });
 
-    return new DataCalc(summarizedObservations, { groups: this._groups });
+    return new DataCalc(summarizedObservations, {
+      groups: this._groups,
+      warnings: this._warnings,
+    });
   }
 
   /**
@@ -495,7 +510,10 @@ export class DataCalc {
       return newObservation;
     });
 
-    return new DataCalc(newObservations, { groups: this._groups });
+    return new DataCalc(newObservations, {
+      groups: this._groups,
+      warnings: this._warnings,
+    });
   }
 
   /**
@@ -556,7 +574,10 @@ export class DataCalc {
       return 0;
     });
 
-    return new DataCalc(sortedObservations, { groups: this._groups });
+    return new DataCalc(sortedObservations, {
+      groups: this._groups,
+      warnings: this._warnings,
+    });
   }
 
   /**
@@ -588,7 +609,10 @@ export class DataCalc {
       seen.add(key);
       return true;
     });
-    return new DataCalc(uniqueObs, { groups: this._groups });
+    return new DataCalc(uniqueObs, {
+      groups: this._groups,
+      warnings: this._warnings,
+    });
   }
 
   /**
@@ -637,7 +661,10 @@ export class DataCalc {
       return newObservation;
     });
 
-    return new DataCalc(newObservations, { groups: this._groups });
+    return new DataCalc(newObservations, {
+      groups: this._groups,
+      warnings: this._warnings,
+    });
   }
 
   /**
@@ -1100,7 +1127,10 @@ export class DataCalc {
 
     if (start >= this._observations.length) {
       // If start is beyond the length of observations, return empty DataCalc
-      return new DataCalc([], { groups: this._groups });
+      return new DataCalc([], {
+        groups: this._groups,
+        warnings: this._warnings,
+      });
     }
     if (end === undefined) {
       // return a single observation at start position
@@ -1109,7 +1139,10 @@ export class DataCalc {
     } else {
       sliced = this._observations.slice(start, end);
     }
-    return new DataCalc(sliced, { groups: this._groups });
+    return new DataCalc(sliced, {
+      groups: this._groups,
+      warnings: this._warnings,
+    });
   }
 
   /**
