@@ -76,6 +76,17 @@ describe("pull tests", () => {
     expect(dc.pull("a")).toBeNull();
   });
 
+  it("logs a warning when pulling from empty dataset and warnings enabled", () => {
+    const spy = jest.spyOn(console, "warn").mockImplementation(() => {});
+    const dc = new DataCalc(d_empty, { warnings: true });
+    expect(dc.pull("a")).toBeNull();
+    expect(spy).toHaveBeenCalled();
+    expect(spy.mock.calls[0][0]).toMatch(
+      /DataCalc.pull\(\): No observations available to pull variable "a" from. Returning null\./,
+    );
+    spy.mockRestore();
+  });
+
   it("works with grouped data", () => {
     const dc = new DataCalc(d);
     const grouped = dc.groupBy("c");

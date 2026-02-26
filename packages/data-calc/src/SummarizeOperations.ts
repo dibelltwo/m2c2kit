@@ -1,9 +1,11 @@
 import { DataCalc } from "./DataCalc";
 import { DataValue } from "./DataValue";
+import { Observation } from "./Observation";
 import { SummarizeOperation } from "./SummarizeOperation";
-import { SummarizeFunction } from "./SummarizeFunction";
+import { SummarizeFunction, LazyValue } from "./SummarizeFunction";
 import { SummarizeOptions } from "./SummarizeOptions";
 import { M2Error } from "./M2Error";
+import { getChainOps, clearChainOps } from "./ChainBuilder";
 
 /**
  * Default options for summarize operations
@@ -21,6 +23,45 @@ const DEFAULT_SUMMARIZE_OPTIONS: SummarizeOptions = {
  */
 function applyDefaultOptions(options?: SummarizeOptions): SummarizeOptions {
   return { ...DEFAULT_SUMMARIZE_OPTIONS, ...options };
+}
+
+// Resolve a possible lazy parameter (function) using the provided DataCalc.
+function resolveLazy(
+  param: DataValue | DataValue[] | LazyValue | undefined,
+  dataCalc: DataCalc,
+  opName?: string,
+): DataValue | DataValue[] | undefined {
+  if (typeof param !== "function") {
+    return param as DataValue | DataValue[] | undefined;
+  }
+
+  // param is a function — call it with the DataCalc and validate the result
+  try {
+    const res = (param as LazyValue)(dataCalc);
+
+    // disallow returning another function
+    if (typeof res === "function") {
+      throw new M2Error(
+        `${opName || "summarize()"}: lazy callback returned a function; expected a value or array of values.`,
+      );
+    }
+
+    // disallow returning a DataCalc instance
+    if (res instanceof DataCalc) {
+      throw new M2Error(
+        `${opName || "summarize()"}: lazy callback returned a DataCalc instance; expected a value or array of values.`,
+      );
+    }
+
+    return res as DataValue | DataValue[] | undefined;
+  } catch (err: any) {
+    // Wrap any errors thrown by the lazy callback with context
+    throw new M2Error(
+      `${opName || "summarize()"}: lazy callback threw an error: ${
+        err && err.message ? err.message : String(err)
+      }`,
+    );
+  }
 }
 
 /**
@@ -141,8 +182,56 @@ function processSingleValue(
   }
 }
 
-const nInternal: SummarizeFunction = (dataCalc: DataCalc): number => {
-  return dataCalc.length;
+const nInternal: SummarizeFunction = (
+  dataCalc: DataCalc,
+  params?: Array<DataValue | LazyValue>,
+): number => {
+  const rawParam = params ? params[0] : undefined;
+
+  // If a predicate function (obs => boolean) was supplied, detect by
+  // applying to the first observation and checking for a boolean result.
+  if (typeof rawParam === "function") {
+    const firstObs = dataCalc.observations[0];
+    if (firstObs !== undefined) {
+      try {
+        const test = (rawParam as (o: Observation) => any)(firstObs);
+        if (typeof test === "boolean") {
+          // Treat as predicate
+          let count = 0;
+          dataCalc.observations.forEach((o) => {
+            if ((rawParam as (o: Observation) => boolean)(o)) count++;
+          });
+          return count;
+        }
+      } catch {
+        // fallthrough: treat as lazy if calling with an observation threw
+      }
+    }
+  }
+
+  // Resolve lazy parameters (DataCalc => value/array) and other scalar forms
+  let variableOrValues = resolveLazy(rawParam as any, dataCalc);
+
+  // No parameter: return row count
+  if (variableOrValues === undefined) return dataCalc.length;
+
+  // If a string variable name was provided, count non-missing values
+  if (typeof variableOrValues === "string") {
+    if (!dataCalc.variableExists(variableOrValues)) return 0;
+    let count = 0;
+    dataCalc.observations.forEach((o) => {
+      if (o[variableOrValues] !== null && o[variableOrValues] !== undefined)
+        count++;
+    });
+    return count;
+  }
+
+  // If an array of values was provided, count its length
+  if (Array.isArray(variableOrValues)) return variableOrValues.length;
+
+  // If a single scalar value was provided, treat non-missing as 1, missing as 0
+  if (variableOrValues === null || variableOrValues === undefined) return 0;
+  return 1;
 };
 /**
  * Calculates the number of observations.
@@ -166,16 +255,24 @@ const nInternal: SummarizeFunction = (dataCalc: DataCalc): number => {
  * ```
  */
 
-export function n(): SummarizeOperation {
-  return SummarizeOperation.leaf(nInternal, [], undefined);
+export function n(
+  variableOrValues?:
+    | string
+    | DataValue
+    | DataValue[]
+    | LazyValue
+    | ((obs: Observation) => boolean),
+): SummarizeOperation {
+  return SummarizeOperation.leaf(nInternal, [variableOrValues], undefined);
 }
 
 const sumInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params?: Array<DataValue>,
+  params?: Array<DataValue | LazyValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params ? params[0] : undefined;
+  let variableOrValues = params ? params[0] : undefined;
+  variableOrValues = resolveLazy(variableOrValues, dataCalc);
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -255,7 +352,7 @@ const sumInternal: SummarizeFunction = (
  * ```
  */
 export function sum(
-  variableOrValues: string | DataValue | DataValue[],
+  variableOrValues: string | DataValue | DataValue[] | LazyValue,
   options?: SummarizeOptions,
 ): SummarizeOperation {
   return SummarizeOperation.leaf(sumInternal, [variableOrValues], options);
@@ -263,10 +360,11 @@ export function sum(
 
 const meanInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params?: Array<DataValue>,
+  params?: Array<DataValue | LazyValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params ? params[0] : undefined;
+  let variableOrValues = params ? params[0] : undefined;
+  variableOrValues = resolveLazy(variableOrValues, dataCalc);
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -340,7 +438,7 @@ const meanInternal: SummarizeFunction = (
  * ```
  */
 export function mean(
-  variableOrValues: string | DataValue | DataValue[],
+  variableOrValues: string | DataValue | DataValue[] | LazyValue,
   options?: SummarizeOptions,
 ): SummarizeOperation {
   return SummarizeOperation.leaf(meanInternal, [variableOrValues], options);
@@ -348,10 +446,11 @@ export function mean(
 
 const varianceInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params?: Array<DataValue>,
+  params?: Array<DataValue | LazyValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params ? params[0] : undefined;
+  let variableOrValues = params ? params[0] : undefined;
+  variableOrValues = resolveLazy(variableOrValues, dataCalc);
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -472,7 +571,7 @@ const varianceInternal: SummarizeFunction = (
  * ```
  */
 export function variance(
-  variableOrValues: string | DataValue | DataValue[],
+  variableOrValues: string | DataValue | DataValue[] | LazyValue,
   options?: SummarizeOptions,
 ): SummarizeOperation {
   return SummarizeOperation.leaf(varianceInternal, [variableOrValues], options);
@@ -480,10 +579,11 @@ export function variance(
 
 const minInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params?: Array<DataValue>,
+  params?: Array<DataValue | LazyValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params ? params[0] : undefined;
+  let variableOrValues = params ? params[0] : undefined;
+  variableOrValues = resolveLazy(variableOrValues, dataCalc);
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -566,7 +666,7 @@ const minInternal: SummarizeFunction = (
  * ```
  */
 export function min(
-  variableOrValues: string | DataValue | DataValue[],
+  variableOrValues: string | DataValue | DataValue[] | LazyValue,
   options?: SummarizeOptions,
 ): SummarizeOperation {
   return SummarizeOperation.leaf(minInternal, [variableOrValues], options);
@@ -574,10 +674,11 @@ export function min(
 
 const maxInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params?: Array<DataValue>,
+  params?: Array<DataValue | LazyValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params ? params[0] : undefined;
+  let variableOrValues = params ? params[0] : undefined;
+  variableOrValues = resolveLazy(variableOrValues, dataCalc);
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -660,7 +761,7 @@ const maxInternal: SummarizeFunction = (
  * ```
  */
 export function max(
-  variableOrValues: string | DataValue | DataValue[],
+  variableOrValues: string | DataValue | DataValue[] | LazyValue,
   options?: SummarizeOptions,
 ): SummarizeOperation {
   return SummarizeOperation.leaf(maxInternal, [variableOrValues], options);
@@ -668,10 +769,11 @@ export function max(
 
 const medianInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params?: Array<DataValue>,
+  params?: Array<DataValue | LazyValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params ? params[0] : undefined;
+  let variableOrValues = params ? params[0] : undefined;
+  variableOrValues = resolveLazy(variableOrValues, dataCalc);
   const mergedOptions = applyDefaultOptions(options);
 
   if (typeof variableOrValues === "string") {
@@ -792,7 +894,7 @@ const medianInternal: SummarizeFunction = (
  * ```
  */
 export function median(
-  variableOrValues: string | DataValue | DataValue[],
+  variableOrValues: string | DataValue | DataValue[] | LazyValue,
   options?: SummarizeOptions,
 ): SummarizeOperation {
   return SummarizeOperation.leaf(medianInternal, [variableOrValues], options);
@@ -800,10 +902,11 @@ export function median(
 
 const sdInternal: SummarizeFunction = (
   dataCalc: DataCalc,
-  params?: Array<DataValue>,
+  params?: Array<DataValue | LazyValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const variableOrValues = params ? params[0] : undefined;
+  let variableOrValues = params ? params[0] : undefined;
+  variableOrValues = resolveLazy(variableOrValues, dataCalc);
 
   if (typeof variableOrValues === "string") {
     if (!dataCalc.variableExists(variableOrValues)) {
@@ -864,7 +967,7 @@ const sdInternal: SummarizeFunction = (
  * ```
  */
 export function sd(
-  variableOrValues: string | DataValue | DataValue[],
+  variableOrValues: string | DataValue | DataValue[] | LazyValue,
   options?: SummarizeOptions,
 ): SummarizeOperation {
   return SummarizeOperation.leaf(sdInternal, [variableOrValues], options);
@@ -876,10 +979,89 @@ export function sd(
  */
 const scalarInternal: SummarizeFunction = (
   _dataCalc: DataCalc,
-  params?: Array<DataValue>,
+  params?: Array<DataValue | LazyValue>,
   options?: SummarizeOptions,
 ): DataValue => {
-  const v = params ? params[0] : undefined;
+  let v = params ? params[0] : undefined;
+  // If scalar is provided as a lazy function, evaluate it now.
+  if (typeof v === "function") v = (v as LazyValue)(_dataCalc);
+  // If scalar is provided as a chain placeholder string like __CHAIN_EXPR__[id],
+  // resolve and evaluate the chain against the current DataCalc so scalars can
+  // wrap lazy chain terminal values (e.g., filter(...).length).
+  if (typeof v === "string") {
+    const re = /^__CHAIN_EXPR__\[(.*?)\]$/;
+    const m = re.exec(v);
+    if (m) {
+      const payload = m[1];
+      let ops: any[] | undefined = getChainOps(payload as string);
+      if (!ops) {
+        try {
+          ops = JSON.parse(decodeURIComponent(payload));
+        } catch {
+          ops = undefined;
+        }
+      }
+
+      if (ops) {
+        let current: any = _dataCalc;
+        let evaluated: number | boolean | undefined = undefined;
+        for (const op of ops) {
+          const method = (current as any)[op.name];
+          if (typeof method !== "function") {
+            evaluated = NaN;
+            break;
+          }
+          const res = method.apply(current, op.args);
+          if (res instanceof DataCalc) {
+            current = res;
+            continue;
+          }
+          if (Array.isArray(res)) {
+            evaluated = res.length;
+            break;
+          }
+          // Preserve boolean results so downstream coercion can consult
+          // `options.coerceBooleans` via `processSingleValue` instead of
+          // coercing here unconditionally.
+          if (typeof res === "boolean") {
+            evaluated = res;
+            break;
+          }
+          evaluated = typeof res === "number" ? res : Number(res);
+          break;
+        }
+        if (evaluated === undefined)
+          evaluated = current instanceof DataCalc ? current.length : NaN;
+        if (!Number.isNaN(evaluated)) v = evaluated;
+        else v = null;
+        // clean up registry
+        try {
+          clearChainOps(payload as string);
+        } catch {}
+      }
+    }
+  }
+
+  // If the scalar wraps a SummarizeOperation, evaluate it now against this DataCalc
+  if (typeof v === "object" && v !== null && "summarizeFunction" in v) {
+    try {
+      const op = v as unknown as SummarizeOperation;
+      const paramsForOp = Array.isArray((op as any).parameters)
+        ? (op as any).parameters
+        : (op as any).parameters === undefined
+          ? undefined
+          : [(op as any).parameters];
+      const raw = op.summarizeFunction(
+        _dataCalc,
+        paramsForOp,
+        (op as any).options,
+      );
+      v = raw;
+    } catch {
+      v = null;
+    }
+  }
+
   // Reuse processSingleValue to ensure consistent coercion and missing handling
   const result = processSingleValue(v, options, "scalar()");
   return result.isMissing ? null : result.value;
@@ -915,7 +1097,7 @@ const scalarInternal: SummarizeFunction = (
  * ```
  */
 export function scalar(
-  value: number | boolean | null | undefined,
+  value: number | boolean | null | undefined | LazyValue | SummarizeOperation,
 ): SummarizeOperation {
   return SummarizeOperation.leaf(scalarInternal, [value], undefined);
 }

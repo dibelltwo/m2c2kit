@@ -4,6 +4,7 @@ import { M2Error } from "./M2Error";
 import { Mutations } from "./Mutations";
 import { Observation } from "./Observation";
 import { SummarizeOperation } from "./SummarizeOperation";
+import { getChainOps, clearChainOps } from "./ChainBuilder";
 
 export class DataCalc {
   private _observations: Array<Observation>;
@@ -203,7 +204,8 @@ export class DataCalc {
    * @remarks This is used with the `summarize()` method to calculate summaries
    * by group.
    *
-   * @param groups - variable names to group by
+   * @param groups - variable names to group by. Grouping variables must be
+   * primitive values (string, number, boolean).
    * @returns A new `DataCalc` object with the observations grouped by one or
    * more variables
    *
@@ -224,6 +226,17 @@ export class DataCalc {
   groupBy(...groups: Array<string>): DataCalc {
     groups.forEach((group) => {
       this.verifyObservationsContainVariable(group);
+      // Ensure grouping variable values are primitives only (number, string, boolean, or null)
+      for (let i = 0; i < this._observations.length; i++) {
+        const val = this._observations[i][group];
+        if (val === null) continue;
+        const t = typeof val;
+        if (t !== "number" && t !== "string" && t !== "boolean") {
+          throw new M2Error(
+            `groupBy(): variable "${group}" contains non-primitive value at index ${i} (type=${t}). Only number, string, boolean, or null are allowed for grouping.`,
+          );
+        }
+      }
     });
     return new DataCalc(this._observations, { groups });
   }
@@ -320,6 +333,31 @@ export class DataCalc {
    * );
    * // [ { filteredTotalC: 10 } ]
    * ```
+   *
+   * @remarks Within a `summarize()` call, regular arithmetic operations
+   * (+, -, *, /, etc.) must not be used directly on `DataCalc` objects
+   * or summary functions. This is not allowed:
+   *
+   * @example
+   * ```js
+   * dc.summarize({
+   *   meanA: mean("a"),
+   *   // The below will cause an error because it attempts to add a number
+   *   // to a DataCalc object, which is not supported
+   *   totalBPlus5: sum("b") + 5
+   * })
+   * ```
+   *
+   * Instead, use the `DataCalc` helper functions such as `add` to perform
+   * calculations within summary results. For example, to add 5 to the sum
+   * of "b", you can do:
+   * @example
+   * ```js
+   * dc.summarize({
+   *   meanA: mean("a"),
+   *   totalBPlus5: sum("b").add(5)
+   * })
+   * ```
    */
   summarize(summarizations: {
     [newVariable: string]: SummarizeOperation | DataValue;
@@ -340,7 +378,103 @@ export class DataCalc {
             summarizeOperation.parameters,
             summarizeOperation.options,
           );
+        } else if (typeof value === "function") {
+          // It's a lazy callback (e.g., ChainBuilder or lazy calc => ...). Call with this DataCalc.
+          try {
+            const res = (value as (dc: DataCalc) => any)(this);
+            if (typeof res === "function") {
+              throw new M2Error(
+                `summarize(): lazy callback for ${newVariable} returned a function; expected a value or array of values.`,
+              );
+            }
+            if (res instanceof DataCalc) {
+              throw new M2Error(
+                `summarize(): lazy callback for ${newVariable} returned a DataCalc; expected a value or array of values.`,
+              );
+            }
+            obs[newVariable] = res;
+          } catch (err: any) {
+            throw new M2Error(
+              `summarize(): lazy callback for ${newVariable} threw an error: ${
+                err && err.message ? err.message : String(err)
+              }`,
+            );
+          }
         } else {
+          // It's a direct value — but allow concatenated serialized chain placeholders
+          if (typeof value === "string") {
+            const re = /__CHAIN_EXPR__\[(.*?)\]/g;
+            const matches = Array.from(value.matchAll(re));
+            if (matches.length > 0) {
+              // Evaluate each serialized chain on this DataCalc and sum numeric results
+              let sum = 0;
+              for (const m of matches) {
+                const payload = m[1];
+                let ops: any[] | undefined = getChainOps(payload);
+                if (!ops) {
+                  try {
+                    ops = JSON.parse(decodeURIComponent(payload));
+                  } catch (err) {
+                    throw new M2Error(
+                      `summarize(): failed to parse chain payload for ${newVariable}`,
+                    );
+                  }
+                }
+
+                let current: any = this;
+                let evaluated: number | undefined = undefined;
+                if (!ops) {
+                  throw new M2Error(
+                    `summarize(): empty chain ops for ${newVariable}`,
+                  );
+                }
+                for (const op of ops) {
+                  const method = (current as any)[op.name];
+                  if (typeof method !== "function") {
+                    throw new M2Error(
+                      `summarize(): chain method ${op.name} does not exist on DataCalc`,
+                    );
+                  }
+                  const res = method.apply(current, op.args);
+                  if (res instanceof DataCalc) {
+                    current = res;
+                    continue;
+                  }
+                  if (Array.isArray(res)) {
+                    evaluated = res.length;
+                    break;
+                  }
+                  // terminal scalar: if boolean, coerce to number (1/0)
+                  if (typeof res === "boolean") {
+                    evaluated = res ? 1 : 0;
+                    break;
+                  }
+                  evaluated = typeof res === "number" ? res : Number(res);
+                  break;
+                }
+                if (evaluated === undefined) {
+                  evaluated = current instanceof DataCalc ? current.length : 0;
+                }
+                sum += evaluated;
+              }
+
+              // Attempt to parse any numeric leftover outside of placeholders
+              let leftover = value;
+              for (const m of matches) leftover = leftover.replace(m[0], "");
+              const leftoverNum = Number(leftover);
+              if (!Number.isNaN(leftoverNum)) sum += leftoverNum;
+
+              obs[newVariable] = sum;
+              // Clean up registry entries that were created when the chain placeholders
+              // were generated. It's safe to delete these after they've been evaluated
+              // for this summarize() invocation.
+              for (const m of matches) {
+                clearChainOps(m[1]);
+              }
+              continue;
+            }
+          }
+
           // It's a direct value
           obs[newVariable] = value;
         }
@@ -361,11 +495,8 @@ export class DataCalc {
     const groupMap = new Map<string, Array<Observation>>();
 
     this._observations.forEach((obs) => {
-      const groupKey = this._groups
-        .map((g) =>
-          typeof obs[g] === "object" ? JSON.stringify(obs[g]) : obs[g],
-        )
-        .join("|");
+      // Build a stable string key for grouping using primitive stringification.
+      const groupKey = this._groups.map((g) => String(obs[g])).join("|");
 
       if (!groupMap.has(groupKey)) {
         groupMap.set(groupKey, []);
@@ -388,27 +519,20 @@ export class DataCalc {
       // Create summary object with group identifiers
       const summaryObj: Observation = {};
       this._groups.forEach((group, i) => {
-        // Get original value as string
         const valueStr = groupValues[i];
-        const originalType = typeof firstObs[group];
-
-        if (originalType === "number") {
-          summaryObj[group] = Number(valueStr);
-        } else if (originalType === "boolean") {
-          summaryObj[group] = valueStr === "true";
-        } else if (valueStr.startsWith("{") || valueStr.startsWith("[")) {
-          try {
-            summaryObj[group] = JSON.parse(valueStr);
-          } catch {
-            throw new M2Error(
-              `Failed to parse group value ${valueStr} as JSON for group ${group}`,
-            );
-            // alternative approach would be to swallow the error and keep as string
-            // summaryObj[group] = valueStr;
-          }
+        // If the original value was null, preserve null.
+        if (firstObs[group] === null) {
+          summaryObj[group] = null;
         } else {
-          // Keep as string
-          summaryObj[group] = valueStr;
+          const originalType = typeof firstObs[group];
+          if (originalType === "number") {
+            summaryObj[group] = Number(valueStr);
+          } else if (originalType === "boolean") {
+            summaryObj[group] = valueStr === "true";
+          } else {
+            // Keep as string
+            summaryObj[group] = valueStr;
+          }
         }
       });
 
@@ -429,7 +553,100 @@ export class DataCalc {
             summarizeOperation.parameters,
             summarizeOperation.options,
           );
+        } else if (typeof value === "function") {
+          // It's a lazy callback (ChainBuilder or lazy calc => ...). Call with group-scoped DataCalc.
+          try {
+            const res = (value as (dc: DataCalc) => any)(groupDataCalc);
+            if (typeof res === "function") {
+              throw new M2Error(
+                `summarize(): lazy callback for ${newVariable} returned a function; expected a value or array of values.`,
+              );
+            }
+            if (res instanceof DataCalc) {
+              throw new M2Error(
+                `summarize(): lazy callback for ${newVariable} returned a DataCalc; expected a value or array of values.`,
+              );
+            }
+            summaryObj[newVariable] = res;
+          } catch (err: any) {
+            throw new M2Error(
+              `summarize(): lazy callback for ${newVariable} threw an error: ${
+                err && err.message ? err.message : String(err)
+              }`,
+            );
+          }
         } else {
+          // It's a direct value — allow concatenated serialized chain placeholders
+          if (typeof value === "string") {
+            const re = /__CHAIN_EXPR__\[(.*?)\]/g;
+            const matches = Array.from(value.matchAll(re));
+            if (matches.length > 0) {
+              let sum = 0;
+              for (const m of matches) {
+                const payload = m[1];
+                let ops: any[] | undefined = getChainOps(payload);
+                if (!ops) {
+                  try {
+                    ops = JSON.parse(decodeURIComponent(payload));
+                  } catch (err) {
+                    throw new M2Error(
+                      `summarize(): failed to parse chain payload for ${newVariable}`,
+                    );
+                  }
+                }
+
+                let current: any = groupDataCalc;
+                let evaluated: number | undefined = undefined;
+                if (!ops) {
+                  throw new M2Error(
+                    `summarize(): empty chain ops for ${newVariable}`,
+                  );
+                }
+                for (const op of ops) {
+                  const method = (current as any)[op.name];
+                  if (typeof method !== "function") {
+                    throw new M2Error(
+                      `summarize(): chain method ${op.name} does not exist on DataCalc`,
+                    );
+                  }
+                  const res = method.apply(current, op.args);
+                  if (res instanceof DataCalc) {
+                    current = res;
+                    continue;
+                  }
+                  if (Array.isArray(res)) {
+                    evaluated = res.length;
+                    break;
+                  }
+                  // terminal scalar: if boolean, coerce to number (1/0)
+                  if (typeof res === "boolean") {
+                    evaluated = res ? 1 : 0;
+                    break;
+                  }
+                  evaluated = typeof res === "number" ? res : Number(res);
+                  break;
+                }
+                if (evaluated === undefined) {
+                  evaluated = current instanceof DataCalc ? current.length : 0;
+                }
+                sum += evaluated;
+              }
+
+              // Attempt to parse any numeric leftover outside of placeholders
+              let leftover = value;
+              for (const m of matches) leftover = leftover.replace(m[0], "");
+              const leftoverNum = Number(leftover);
+              if (!Number.isNaN(leftoverNum)) sum += leftoverNum;
+
+              summaryObj[newVariable] = sum;
+              // Clean up registry entries created for these chain placeholders.
+              for (const m of matches) {
+                clearChainOps(m[1]);
+              }
+              continue;
+            }
+          }
+
           // It's a direct value
           summaryObj[newVariable] = value;
         }
@@ -618,6 +835,11 @@ export class DataCalc {
   /**
    * Renames variables in the observations.
    *
+   * @remarks If a target name in `renames` already exists in the dataset (and is not
+   * simply the source name being renamed), the rename will overwrite the existing
+   * variable. When warnings are enabled, a warning will be logged to make users aware
+   * of the potential overwrite.
+   *
    * @param renames - Object mapping new variable names to old variable names
    * @returns A new DataCalc object with renamed variables
    *
@@ -641,19 +863,38 @@ export class DataCalc {
       this.verifyObservationsContainVariable(oldName);
     });
 
+    // Detect collisions: target names that already exist in the dataset (and are
+    // not simply the source name being renamed). When warnings are enabled, log a
+    // warning so users are aware that rename will overwrite existing columns.
+    if (this._observations.length > 0) {
+      const existingKeys = new Set(Object.keys(this._observations[0]));
+      const oldNames = new Set(Object.values(renames));
+      const collisions = Object.keys(renames).filter(
+        (n) => existingKeys.has(n) && !oldNames.has(n),
+      );
+      if (collisions.length > 0 && this._warnings) {
+        console.warn(
+          `DataCalc.rename(): renaming will overwrite existing variables: ${collisions.join(", ")}`,
+        );
+      }
+    }
+
     const newObservations = this._observations.map((observation) => {
       const newObservation: Observation = {};
 
-      // Copy all properties
+      // Precompute sets for quick lookup so that rename targets override existing names
+      const newNames = new Set(Object.keys(renames));
+
+      // Copy or remap properties. If a property is being renamed (its name appears in
+      // the values of `renames`) we remap it to the new name. If a property name
+      // collides with a new name, skip copying it so the renamed value overwrites it.
       for (const [key, value] of Object.entries(observation)) {
-        // If this is a property being renamed, use the new name
         const newKey = Object.entries(renames).find(
           ([, old]) => old === key,
         )?.[0];
         if (newKey) {
           newObservation[newKey] = value;
-        } else if (!Object.values(renames).includes(key)) {
-          // Only copy if not a renamed property
+        } else if (!newNames.has(key)) {
           newObservation[key] = value;
         }
       }
@@ -1344,6 +1585,40 @@ export class DataCalc {
    * @returns a deep copy of the object
    */
   private deepCopy<T>(source: T, map = new WeakMap()): T {
+    // Use modern structuredClone if available (Node 17+, modern browsers).
+    // Only use it for plain objects/arrays to avoid losing custom prototypes
+    // (e.g., class instances). Use `globalThis` to avoid TypeScript lib issues.
+    const sClone = (globalThis as any).structuredClone;
+    if (typeof sClone === "function") {
+      try {
+        const proto =
+          source && typeof source === "object"
+            ? Object.getPrototypeOf(source)
+            : null;
+        const isPlain =
+          Array.isArray(source) || proto === Object.prototype || proto === null;
+        if (isPlain) {
+          // Ensure there are no accessor properties (getters/setters) on the
+          // own properties. `structuredClone` will not preserve property
+          // descriptors or accessors; the manual copy preserves them, so skip
+          // structuredClone when accessors are present.
+          const descriptors = Object.getOwnPropertyDescriptors(
+            source as object,
+          );
+          const hasAccessors = Object.values(descriptors).some(
+            // eslint-disable-next-line @typescript-eslint/no-explicit-any
+            (d: any) =>
+              typeof d.get === "function" || typeof d.set === "function",
+          );
+          if (!hasAccessors) {
+            return sClone(source);
+          }
+        }
+      } catch {
+        // Fallback to manual copy if structuredClone fails
+      }
+    }
+
     // Handle primitive values and null
     if (source === null || typeof source !== "object") {
       return source;
@@ -1374,8 +1649,17 @@ export class DataCalc {
         key as keyof T,
       );
       if (descriptor) {
+        // If the property has a getter/setter, we snapshot the value and
+        // remove the accessors from the descriptor to avoid TypeError
+        // when defining the property with a value.
+        // This is intentional: accessors are evaluated during cloning and
+        // their resulting value is stored on the copy (we do not copy
+        // the getter/setter functions themselves to avoid closing over the
+        // original object's internal state).
+        // eslint-disable-next-line @typescript-eslint/no-unused-vars
+        const { get, set, ...descWithoutAccessors } = descriptor;
         Object.defineProperty(copy, key, {
-          ...descriptor,
+          ...descWithoutAccessors,
           // eslint-disable-next-line @typescript-eslint/no-explicit-any
           value: this.deepCopy((source as any)[key], map),
         });

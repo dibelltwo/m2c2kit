@@ -1,7 +1,8 @@
 import { DataCalc } from "./DataCalc";
+import { getChainOps, clearChainOps } from "./ChainBuilder";
 import { SummarizeOptions } from "./SummarizeOptions";
 import { DataValue } from "./DataValue";
-import { SummarizeFunction } from "./SummarizeFunction";
+import { SummarizeFunction, LazyValue } from "./SummarizeFunction";
 
 type Operator = "+" | "-" | "*" | "/" | "^";
 
@@ -38,12 +39,16 @@ export class SummarizeOperation {
   // when the operation is reduced to a leaf.
   private leafFn?: SummarizeFunction;
 
-  // optional parameters/options attached to the leaf reducer
-  public parameters?: DataValue[] | undefined;
+  // optional parameters/options attached to the leaf reducer. Parameters may
+  // include `LazyValue` callbacks which are evaluated at summarize-time.
+  public parameters?: Array<DataValue | LazyValue> | undefined;
   public options?: SummarizeOptions;
 
   // token stream representing expression: operand (op operand)*
   private tokens: Token[];
+  // During evaluation collect chain ids used so registry entries can be cleaned
+  // up after the evaluation completes.
+  private _usedChainIds?: Set<string>;
 
   // Expose summarizeFunction property so DataCalc.summarize detects it.
   // It delegates to evaluate(dc).
@@ -232,11 +237,71 @@ export class SummarizeOperation {
   }
 
   // Evaluate an operand token to a number (returns NaN for non-numeric)
-  private evaluateOperandToNumber(
-    opd: number | SummarizeOperation,
-    dc: DataCalc,
-  ): number {
+  private evaluateOperandToNumber(opd: any, dc: DataCalc): number {
+    // initialize used id set for this top-level evaluation
+    if (!this._usedChainIds) this._usedChainIds = new Set<string>();
+    // Handle numeric literal
     if (typeof opd === "number") return opd;
+
+    // Handle chain placeholder strings like __CHAIN_EXPR__[id]
+    if (typeof opd === "string") {
+      const re = /^__CHAIN_EXPR__\[(.*?)\]$/;
+      const m = re.exec(opd);
+      if (m) {
+        const payload = m[1];
+        // Try to resolve via registry first
+        let ops: any[] | undefined = getChainOps(payload as string);
+        if (ops) this._usedChainIds?.add(payload as string);
+        if (!ops) {
+          // Fallback to legacy encoded JSON payloads
+          try {
+            ops = JSON.parse(decodeURIComponent(payload));
+          } catch {
+            ops = undefined;
+          }
+        }
+        if (!ops) return NaN;
+
+        let current: any = dc;
+        let evaluated: number | undefined = undefined;
+        for (const op of ops) {
+          const method = (current as any)[op.name];
+          if (typeof method !== "function") return NaN;
+          const res = method.apply(current, op.args);
+          if (res instanceof DataCalc) {
+            current = res;
+            continue;
+          }
+          if (Array.isArray(res)) {
+            evaluated = res.length;
+            break;
+          }
+          // If the terminal result is a boolean, consult coerceBooleans
+          // from this operation's options (default true) to decide whether
+          // to coerce to 1/0 or treat as missing (NaN).
+          if (typeof res === "boolean") {
+            const coerce =
+              this.options && typeof this.options.coerceBooleans === "boolean"
+                ? this.options.coerceBooleans
+                : true;
+            if (coerce) {
+              evaluated = res ? 1 : 0;
+              break;
+            } else {
+              return NaN;
+            }
+          }
+
+          evaluated = typeof res === "number" ? res : Number(res);
+          break;
+        }
+        if (evaluated === undefined)
+          evaluated = current instanceof DataCalc ? current.length : NaN;
+        return typeof evaluated === "number" && !isNaN(evaluated)
+          ? evaluated
+          : NaN;
+      }
+    }
     // opd is SummarizeOperation: if it has a leafFn and only a leaf token referencing itself,
     // calling its leafFn will compute the reducer for the current group (dc)
     const params = Array.isArray(opd.parameters)
@@ -299,9 +364,21 @@ export class SummarizeOperation {
     }
 
     const final = operands[0];
-    if (typeof final === "number") return final;
+    if (typeof final === "number") {
+      // Clean up any chain entries that were referenced during this evaluation
+      if (this._usedChainIds) {
+        for (const id of this._usedChainIds) clearChainOps(id);
+        this._usedChainIds = undefined;
+      }
+      return final;
+    }
     // If it's still a SummarizeOperation (unlikely), evaluate it
-    return this.evaluateOperandToNumber(final as Operand, dc);
+    const res = this.evaluateOperandToNumber(final as Operand, dc);
+    if (this._usedChainIds) {
+      for (const id of this._usedChainIds) clearChainOps(id);
+      this._usedChainIds = undefined;
+    }
+    return res;
   }
 
   /**

@@ -7,5 +7,6 @@ export * from "./SummarizeFunction";
 export * from "./SummarizeOperation";
 export * from "./SummarizeOperations";
 export * from "./SummarizeOptions";
+export * from "./ChainBuilder";
 
 console.log("⚪ @m2c2kit/data-calc version __PACKAGE_JSON_VERSION__");

@@ -146,6 +146,58 @@ describe("summarize tests", () => {
     expect(result.observations[1]).toHaveProperty("c");
   });
 
+  it("throws when grouping by non-primitive values", () => {
+    const bad = [{ a: { x: 1 }, b: 2 }];
+    const dc = new DataCalc(bad);
+    expect(() => dc.groupBy("a")).toThrow();
+  });
+
+  it("groups null values together and preserves null in summary", () => {
+    const dNull = [
+      { g: null, val: 1 },
+      { g: null, val: 2 },
+      { g: "x", val: 3 },
+    ];
+    const dc = new DataCalc(dNull);
+    const res = dc.groupBy("g").summarize({ sumVal: sum("val") });
+
+    expect(res.observations).toHaveLength(2);
+    expect(res.observations).toContainEqual({ g: null, sumVal: 3 });
+    expect(res.observations).toContainEqual({ g: "x", sumVal: 3 });
+  });
+
+  it("grouped lazy callback returning a function throws", () => {
+    const data = [
+      { g: 1, v: 1 },
+      { g: 1, v: 2 },
+    ];
+    const dc = new DataCalc(data);
+    expect(() => dc.groupBy("g").summarize({ bad: () => () => {} })).toThrow();
+  });
+
+  it("grouped lazy callback returning a DataCalc throws", () => {
+    const data = [
+      { g: 1, v: 1 },
+      { g: 2, v: 2 },
+    ];
+    const dc = new DataCalc(data);
+    expect(() =>
+      dc.groupBy("g").summarize({ bad: () => new DataCalc([]) }),
+    ).toThrow();
+  });
+
+  it("grouped lazy callback that throws is wrapped in an M2Error", () => {
+    const data = [{ g: 1, v: 1 }];
+    const dc = new DataCalc(data);
+    expect(() =>
+      dc.groupBy("g").summarize({
+        bad: () => {
+          throw new Error("boom");
+        },
+      }),
+    ).toThrow(/threw an error/);
+  });
+
   it("handles empty datasets", () => {
     const dc = new DataCalc(d_empty);
     const result = dc.summarize({ count: n() });
