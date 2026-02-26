@@ -29,7 +29,7 @@ import {
   LocalePicker,
   InstructionsOptions,
 } from "@m2c2kit/addons";
-import { DataCalc, median } from "@m2c2kit/data-calc";
+import { arrange, DataCalc, filter, median, sd } from "@m2c2kit/data-calc";
 
 /**
  * Symbol Search is a speeded continuous performance test of conjunctive
@@ -285,6 +285,10 @@ positions.",
         type: "integer",
         description: "Number of trials completed.",
       },
+      n_trials_total: {
+        type: "integer",
+        description: "Number of trials completed. Same as n_trials.",
+      },
       n_trials_lure: {
         type: "integer",
         description: "Number of lure trials completed.",
@@ -297,6 +301,16 @@ positions.",
         type: "integer",
         description:
           "Does the number of completed and expected trials match? 1 = true, 0 = false.",
+      },
+      flag_trials_lt_expected: {
+        type: "number",
+        description:
+          "Is the number of completed trials fewer than expected? 1 = true, 0 = false.",
+      },
+      flag_trials_gt_expected: {
+        type: "number",
+        description:
+          "Is the number of completed trials greater than expected? 1 = true, 0 = false.",
       },
       n_trials_correct: {
         type: "integer",
@@ -328,6 +342,16 @@ positions.",
       median_response_time_correct: {
         type: ["number", "null"],
         description: "Median response time for correct trials.",
+      },
+      median_response_time_correct_filtered: {
+        type: ["number", "null"],
+        description:
+          "Median response time for correct trials within the specified filter response time filter.",
+      },
+      std_response_time_correct_filtered: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time for correct trials within the specified filter response time filter.",
       },
       median_response_time_incorrect: {
         type: ["number", "null"],
@@ -1411,50 +1435,85 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
     },
   ) {
     const dc = new DataCalc(data);
+    // Trials participant completed; remove quit trials from the count.
+    const n_trials = dc.filter(
+      (obs) => obs.quit_button_pressed === false,
+    ).length;
     const scores = dc
       .summarize({
         activity_begin_iso8601_timestamp: this.beginIso8601Timestamp,
-        first_trial_begin_iso8601_timestamp: dc
-          .arrange("trial_begin_iso8601_timestamp")
+        first_trial_begin_iso8601_timestamp: arrange(
+          "trial_begin_iso8601_timestamp",
+        )
           .slice(0)
           .pull("trial_begin_iso8601_timestamp"),
-        last_trial_end_iso8601_timestamp: dc
-          .arrange("-trial_end_iso8601_timestamp")
+        last_trial_end_iso8601_timestamp: arrange(
+          "-trial_end_iso8601_timestamp",
+        )
           .slice(0)
           .pull("trial_end_iso8601_timestamp"),
-        n_trials: dc.length,
-        flag_trials_match_expected: dc.length === extras.numberOfTrials ? 1 : 0,
-        n_trials_lure: dc.filter((obs) => obs.trial_type === "lure").length,
-        n_trials_normal: dc.filter((obs) => obs.trial_type === "normal").length,
-        n_trials_correct: dc.filter(
-          (obs) => obs.user_response_index === obs.correct_response_index,
+        n_trials: n_trials,
+        n_trials_total: n_trials,
+        flag_trials_match_expected: n_trials === extras.numberOfTrials ? 1 : 0,
+        flag_trials_lt_expected: n_trials < extras.numberOfTrials ? 1 : 0,
+        flag_trials_gt_expected: n_trials > extras.numberOfTrials ? 1 : 0,
+        n_trials_lure: filter((obs) => obs.trial_type === "lure").length,
+        n_trials_normal: filter((obs) => obs.trial_type === "normal").length,
+        n_trials_correct: filter(
+          (obs) =>
+            typeof obs.user_response_index === "number" &&
+            obs.user_response_index === obs.correct_response_index,
         ).length,
-        n_trials_incorrect: dc.filter(
-          (obs) => obs.user_response_index !== obs.correct_response_index,
+        n_trials_incorrect: filter(
+          (obs) =>
+            typeof obs.user_response_index === "number" &&
+            obs.user_response_index !== obs.correct_response_index,
         ).length,
-        median_response_time_overall: median("response_time_duration_ms"),
+        median_response_time_overall: median("response_time_duration_ms", {
+          // `skipMissing` is true for compatibility with the python code,
+          // which uses `numpy.median` with the default behavior of skipping
+          // missing values. However, the assessments do not generate summary
+          // scores if the participant quits and creates missing values,
+          // so this should not have an effect on scores that are generated.
+          skipMissing: true,
+        }),
         median_response_time_filtered: median(
-          dc
-            .filter(
-              (obs) =>
-                obs.response_time_duration_ms >= extras.rtLowerBound &&
-                obs.response_time_duration_ms <= extras.rtUpperBound,
-            )
-            .pull("response_time_duration_ms"),
+          filter(
+            (obs) =>
+              obs.response_time_duration_ms >= extras.rtLowerBound &&
+              obs.response_time_duration_ms <= extras.rtUpperBound,
+          ).pull("response_time_duration_ms"),
+          { skipMissing: true },
         ),
         median_response_time_correct: median(
-          dc
-            .filter(
-              (obs) => obs.user_response_index === obs.correct_response_index,
-            )
-            .pull("response_time_duration_ms"),
+          filter(
+            (obs) => obs.user_response_index === obs.correct_response_index,
+          ).pull("response_time_duration_ms"),
+          { skipMissing: true },
+        ),
+        median_response_time_correct_filtered: median(
+          filter(
+            (obs) =>
+              obs.user_response_index === obs.correct_response_index &&
+              obs.response_time_duration_ms >= extras.rtLowerBound &&
+              obs.response_time_duration_ms <= extras.rtUpperBound,
+          ).pull("response_time_duration_ms"),
+          { skipMissing: true },
+        ),
+        std_response_time_correct_filtered: sd(
+          filter(
+            (obs) =>
+              obs.user_response_index === obs.correct_response_index &&
+              obs.response_time_duration_ms >= extras.rtLowerBound &&
+              obs.response_time_duration_ms <= extras.rtUpperBound,
+          ).pull("response_time_duration_ms"),
+          { skipMissing: true },
         ),
         median_response_time_incorrect: median(
-          dc
-            .filter(
-              (obs) => obs.user_response_index !== obs.correct_response_index,
-            )
-            .pull("response_time_duration_ms"),
+          filter(
+            (obs) => obs.user_response_index !== obs.correct_response_index,
+          ).pull("response_time_duration_ms"),
+          { skipMissing: true },
         ),
         response_time_filter_lower_bound: extras.rtLowerBound,
         response_time_filter_upper_bound: extras.rtUpperBound,

@@ -33,7 +33,14 @@ import {
   InstructionsOptions,
   LocalePicker,
 } from "@m2c2kit/addons";
-import { DataCalc, sum } from "@m2c2kit/data-calc";
+import {
+  arrange,
+  DataCalc,
+  filter,
+  median,
+  sum,
+  scalar,
+} from "@m2c2kit/data-calc";
 
 /**
  * Color Dots is cued-recall, item-location memory binding task, where after
@@ -159,6 +166,15 @@ class ColorDots extends Game implements ScoringProvider {
         type: "boolean",
         default: false,
         description: "Should scoring data be generated? Default is false.",
+      },
+      scoring_filter_response_time_duration_ms: {
+        type: "array",
+        items: {
+          type: "number",
+        },
+        default: [100, 10000],
+        description:
+          "When scoring, values of response_time_duration_ms less than the lower bound or greater than the upper bound are discarded. This array contains two numbers, the lower and upper bounds.",
       },
     };
 
@@ -326,6 +342,101 @@ class ColorDots extends Game implements ScoringProvider {
         description:
           "Does the number of completed and expected trials match? 1 = true, 0 = false.",
       },
+      flag_trials_lt_expected: {
+        type: "number",
+        description:
+          "Is the number of completed trials fewer than expected? 1 = true, 0 = false.",
+      },
+      flag_trials_gt_expected: {
+        type: "number",
+        description:
+          "Is the number of completed trials greater than expected? 1 = true, 0 = false.",
+      },
+      n_trials_color_swap: {
+        type: ["number", "null"],
+        description:
+          "Number of trials where the participant selected the color of a non-target (swap) dot",
+      },
+      n_trials_location_swap: {
+        type: ["number", "null"],
+        description:
+          "Number of trials where the participant selected the location of a non-target (swap) dot",
+      },
+      n_responses_swap_total: {
+        type: ["number", "null"],
+        description:
+          "Total number of swap responses across both color and location recall (n_trials_color_swap + n_trials_location_swap)",
+      },
+      n_trials_color_incorrect: {
+        type: ["number", "null"],
+        description:
+          "Number of trials where the color response was not correct (includes both swaps and random errors)",
+      },
+      n_trials_location_incorrect: {
+        type: ["number", "null"],
+        description:
+          "Number of trials where the location response was not correct (includes both swaps and random errors)",
+      },
+      n_responses_incorrect_total: {
+        type: ["number", "null"],
+        description:
+          "Total number of incorrect responses across both color and location recall (n_trials_color_incorrect + n_trials_location_incorrect)",
+      },
+      n_trials_color_correct: {
+        type: ["number", "null"],
+        description:
+          "Number of trials where the participant correctly recalled the target dot's color",
+      },
+      n_trials_location_correct: {
+        type: ["number", "null"],
+        description:
+          "Number of trials where the participant correctly recalled the target dot's location (within 75 pixel threshold)",
+      },
+      n_responses_correct_total: {
+        type: ["number", "null"],
+        description:
+          "Total number of correct responses across both color and location recall (n_trials_color_correct + n_trials_location_correct)",
+      },
+      median_response_time_color_filtered: {
+        type: ["number", "null"],
+        description:
+          "Median color selection response time (ms) after filtering outliers (RT < 100 ms or RT > 10,000 ms removed)",
+      },
+      median_response_time_location_filtered: {
+        type: ["number", "null"],
+        description:
+          "Median location selection response time (ms) after filtering outliers (RT < 100 ms or RT > 10,000 ms removed)",
+      },
+      median_response_time_color_filtered_correct: {
+        type: ["number", "null"],
+        description:
+          "Median color selection response time (ms) for correct color trials only, after filtering outliers",
+      },
+      median_response_time_location_filtered_correct: {
+        type: ["number", "null"],
+        description:
+          "Median location selection response time (ms) for correct location trials only, after filtering outliers",
+      },
+      median_response_time_color_filtered_swap: {
+        type: ["number", "null"],
+        description:
+          "Median color selection response time (ms) for swap color trials only, after filtering outliers",
+      },
+      median_response_time_location_filtered_swap: {
+        type: ["number", "null"],
+        description:
+          "Median location selection response time (ms) for swap location trials only, after filtering outliers",
+      },
+      median_response_time_color_filtered_incorrect: {
+        type: ["number", "null"],
+        description:
+          "Median color selection response time (ms) for all incorrect (swap + random) color trials, after filtering outliers",
+      },
+      median_response_time_location_filtered_incorrect: {
+        type: ["number", "null"],
+        description:
+          "Median location selection response time (ms) for all incorrect (swap + random) location trials, after filtering outliers",
+      },
       participant_score: {
         type: ["number", "null"],
         description:
@@ -491,6 +602,12 @@ appeared.",
           // empty data to calculateScores so a "blank" set of scores is
           // generated.
           const scores = game.calculateScores([], {
+            rtLowerBound: game.getParameter<Array<number>>(
+              "scoring_filter_response_time_duration_ms",
+            )[0],
+            rtUpperBound: game.getParameter<Array<number>>(
+              "scoring_filter_response_time_duration_ms",
+            )[1],
             numberOfTrials: game.getParameter<number>("number_of_trials"),
             dotDiameter: game.getParameter<number>("dot_diameter"),
           });
@@ -1230,6 +1347,12 @@ appeared.",
       } else {
         if (game.getParameter<boolean>("scoring")) {
           const scores = game.calculateScores(game.data.trials, {
+            rtLowerBound: game.getParameter<Array<number>>(
+              "scoring_filter_response_time_duration_ms",
+            )[0],
+            rtUpperBound: game.getParameter<Array<number>>(
+              "scoring_filter_response_time_duration_ms",
+            )[1],
             numberOfTrials: game.getParameter<number>("number_of_trials"),
             dotDiameter: game.getParameter<number>("dot_diameter"),
           });
@@ -1285,6 +1408,8 @@ appeared.",
   calculateScores(
     data: ActivityKeyValueData[],
     extras: {
+      rtLowerBound: number;
+      rtUpperBound: number;
       numberOfTrials: number;
       dotDiameter: number;
     },
@@ -1327,7 +1452,12 @@ appeared.",
     };
 
     const dc = new DataCalc(data);
+
+    // Trials participant completed; remove quit trials from the count.
+    const n_trials = dc.filter((o) => o.quit_button_pressed === false).length;
+
     const scores = dc
+      .filter((o) => o.quit_button_pressed === false)
       .mutate({
         trial_score: (obs) => {
           const maxDistance = maxDistanceWithinSquare(
@@ -1344,23 +1474,167 @@ appeared.",
             100
           );
         },
+        metric_accuracy_color: (obs) => {
+          if (
+            obs.color_selected.color_name ===
+            obs.presented_dots[obs.color_target_dot_index].color_name
+          ) {
+            return "Correct";
+          } else if (
+            obs.presented_dots
+              .map((dot: any) => dot.color_name)
+              .includes(obs.color_selected.color_name)
+          ) {
+            return "Swap";
+          }
+          return "Random";
+        },
+        metric_accuracy_location: (obs) => {
+          if (obs.location_selected_delta <= 75) {
+            return "Correct";
+          } else if (
+            obs.presented_dots
+              .map((dot: any) =>
+                euclideanDistance(dot.location, obs.location_selected),
+              )
+              .some((dist: number) => dist <= 75)
+          ) {
+            return "Swap";
+          }
+          return "Random";
+        },
+        color_section_rt_filtered: (obs) =>
+          obs.color_selection_response_time_ms >= extras.rtLowerBound &&
+          obs.color_selection_response_time_ms <= extras.rtUpperBound,
+        location_section_rt_filtered: (obs) =>
+          obs.location_selection_response_time_ms >= extras.rtLowerBound &&
+          obs.location_selection_response_time_ms <= extras.rtUpperBound,
       })
       .summarize({
         activity_begin_iso8601_timestamp: this.beginIso8601Timestamp,
-        first_trial_begin_iso8601_timestamp: dc
-          .arrange("trial_begin_iso8601_timestamp")
+        first_trial_begin_iso8601_timestamp: arrange(
+          "trial_begin_iso8601_timestamp",
+        )
           .slice(0)
           .pull("trial_begin_iso8601_timestamp"),
-        last_trial_end_iso8601_timestamp: dc
-          .arrange("-trial_end_iso8601_timestamp")
+        last_trial_end_iso8601_timestamp: arrange(
+          "-trial_end_iso8601_timestamp",
+        )
           .slice(0)
           .pull("trial_end_iso8601_timestamp"),
-        n_trials: dc.length,
-        flag_trials_match_expected: dc.length === extras.numberOfTrials ? 1 : 0,
+        n_trials: n_trials,
+        flag_trials_match_expected: n_trials === extras.numberOfTrials ? 1 : 0,
+        flag_trials_lt_expected: n_trials < extras.numberOfTrials ? 1 : 0,
+        flag_trials_gt_expected: n_trials > extras.numberOfTrials ? 1 : 0,
+        // Swaps Only
+        n_trials_color_swap: filter((o) => o.metric_accuracy_color === "Swap")
+          .length,
+        n_trials_location_swap: filter(
+          (o) => o.metric_accuracy_location === "Swap",
+        ).length,
+        n_responses_swap_total: scalar(
+          filter((o) => o.metric_accuracy_color === "Swap").length,
+        ).add(
+          scalar(filter((o) => o.metric_accuracy_location === "Swap").length),
+        ),
+        // All Incorrect (Swaps + Random)
+        n_trials_color_incorrect: filter(
+          (o) => o.metric_accuracy_color !== "Correct",
+        ).length,
+        n_trials_location_incorrect: filter(
+          (o) => o.metric_accuracy_location !== "Correct",
+        ).length,
+        n_responses_incorrect_total: scalar(
+          filter((o) => o.metric_accuracy_color !== "Correct").length,
+        ).add(
+          scalar(
+            filter((o) => o.metric_accuracy_location !== "Correct").length,
+          ),
+        ),
+        // Correct
+        n_trials_color_correct: filter(
+          (o) => o.metric_accuracy_color === "Correct",
+        ).length,
+        n_trials_location_correct: filter(
+          (o) => o.metric_accuracy_location === "Correct",
+        ).length,
+        n_responses_correct_total: scalar(
+          filter((o) => o.metric_accuracy_color === "Correct").length,
+        ).add(
+          scalar(
+            filter((o) => o.metric_accuracy_location === "Correct").length,
+          ),
+        ),
+        // Filter out outliers: RT < 100 ms or RT > 10,000 ms
+        median_response_time_color_filtered: median(
+          filter((o) => o.color_section_rt_filtered).pull(
+            "color_selection_response_time_ms",
+          ),
+        ),
+        median_response_time_location_filtered: median(
+          filter((o) => o.location_section_rt_filtered).pull(
+            "location_selection_response_time_ms",
+          ),
+        ),
+        // RT for Correct AND RT within bounds
+        median_response_time_color_filtered_correct: median(
+          filter(
+            (o) =>
+              o.color_section_rt_filtered &&
+              o.metric_accuracy_color === "Correct",
+          ).pull("color_selection_response_time_ms"),
+        ),
+        median_response_time_location_filtered_correct: median(
+          filter(
+            (o) =>
+              o.location_section_rt_filtered &&
+              o.metric_accuracy_location === "Correct",
+          ).pull("location_selection_response_time_ms"),
+        ),
+        // RT for Swaps AND RT within bounds
+        median_response_time_color_filtered_swap: median(
+          filter(
+            (o) =>
+              o.color_section_rt_filtered && o.metric_accuracy_color === "Swap",
+          ).pull("color_selection_response_time_ms"),
+        ),
+        median_response_time_location_filtered_swap: median(
+          filter(
+            (o) =>
+              o.location_section_rt_filtered &&
+              o.metric_accuracy_location === "Swap",
+          ).pull("location_selection_response_time_ms"),
+        ),
+        // RT for Incorrect (swap & random) AND RT within bounds
+        median_response_time_color_filtered_incorrect: median(
+          filter(
+            (o) =>
+              o.color_section_rt_filtered &&
+              o.metric_accuracy_color !== "Correct",
+          ).pull("color_selection_response_time_ms"),
+        ),
+        median_response_time_location_filtered_incorrect: median(
+          filter(
+            (o) =>
+              o.location_section_rt_filtered &&
+              o.metric_accuracy_location !== "Correct",
+          ).pull("location_selection_response_time_ms"),
+        ),
         participant_score: sum("trial_score"),
       });
     return scores.observations;
   }
+}
+
+interface Dot {
+  x: number;
+  y: number;
+}
+
+function euclideanDistance(dot1: Dot, dot2: Dot): number {
+  const xDiff = dot1.x - dot2.x;
+  const yDiff = dot1.y - dot2.y;
+  return Math.sqrt(xDiff * xDiff + yDiff * yDiff);
 }
 
 export { ColorDots };

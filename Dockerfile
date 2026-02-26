@@ -25,7 +25,8 @@ WORKDIR /usr/src/m2c2kit
 
 COPY . .
 
-ENV NODE_OPTIONS=--max_old_space_size=4096
+ENV NODE_OPTIONS=--max_old_space_size=3072
+ENV CI=true
 
 RUN npm ci
 RUN npx playwright install --with-deps chromium

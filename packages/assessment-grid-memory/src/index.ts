@@ -30,7 +30,17 @@ import {
   InstructionsOptions,
   LocalePicker,
 } from "@m2c2kit/addons";
-import { DataCalc, median, sum } from "@m2c2kit/data-calc";
+import {
+  arrange,
+  DataCalc,
+  filter,
+  max,
+  mean,
+  median,
+  min,
+  sd,
+  sum,
+} from "@m2c2kit/data-calc";
 
 /**
  * Grid Memory is a visuospatial working memory task, with delayed free
@@ -339,10 +349,15 @@ class GridMemory extends Game implements ScoringProvider {
         description:
           "Does the number of completed and expected trials match? 1 = true, 0 = false.",
       },
-      distance_hausdorff_median: {
-        type: ["number", "null"],
+      flag_trials_lt_expected: {
+        type: "number",
         description:
-          "Median across all trials of the Hausdorff distance between the presented and selected cells within a trial.",
+          "Is the number of completed trials fewer than expected? 1 = true, 0 = false.",
+      },
+      flag_trials_gt_expected: {
+        type: "number",
+        description:
+          "Is the number of completed trials greater than expected? 1 = true, 0 = false.",
       },
       sum_exact_targets: {
         type: ["integer", "null"],
@@ -354,6 +369,97 @@ class GridMemory extends Game implements ScoringProvider {
         description:
           "Percent of exact targets out of all targets across all trials. An exact target is a target that was selected in the correct location.",
       },
+      metric_error_distance_hausdorff_mean: {
+        type: ["number", "null"],
+        description:
+          "Mean of Hausdorff distance scores across all trials in the session",
+      },
+      metric_error_distance_hausdorff_median: {
+        type: ["number", "null"],
+        description:
+          "Median of Hausdorff distance scores across all trials in the session",
+      },
+      metric_error_distance_hausdorff_min: {
+        type: ["number", "null"],
+        description:
+          "Minimum Hausdorff distance score across all trials in the session (best performance)",
+      },
+      metric_error_distance_hausdorff_max: {
+        type: ["number", "null"],
+        description:
+          "Maximum Hausdorff distance score across all trials in the session (worst performance)",
+      },
+      metric_error_distance_hausdorff_sum: {
+        type: ["number", "null"],
+        description:
+          "Sum of Hausdorff distance scores across all trials in the session",
+      },
+      metric_error_distance_hausdorff_std: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of Hausdorff distance scores across all trials in the session",
+      },
+      // The following distances are commented out for now as we revise the scoring approach.
+      // metric_error_distance_mean_mean: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Mean of mean-error-distance scores across all trials in the session",
+      // },
+      // metric_error_distance_mean_median: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Median of mean-error-distance scores across all trials in the session",
+      // },
+      // metric_error_distance_mean_min: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Minimum mean-error-distance score across all trials (best performance)",
+      // },
+      // metric_error_distance_mean_max: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Maximum mean-error-distance score across all trials (worst performance)",
+      // },
+      // metric_error_distance_mean_sum: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Sum of mean-error-distance scores across all trials in the session",
+      // },
+      // metric_error_distance_mean_std: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Standard deviation of mean-error-distance scores across all trials in the session",
+      // },
+      // metric_error_distance_sum_mean: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Mean of sum-error-distance scores across all trials in the session",
+      // },
+      // metric_error_distance_sum_median: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Median of sum-error-distance scores across all trials in the session",
+      // },
+      // metric_error_distance_sum_min: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Minimum sum-error-distance score across all trials (best performance)",
+      // },
+      // metric_error_distance_sum_max: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Maximum sum-error-distance score across all trials (worst performance)",
+      // },
+      // metric_error_distance_sum_sum: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Sum of sum-error-distance scores across all trials in the session",
+      // },
+      // metric_error_distance_sum_std: {
+      //   type: ["number", "null"],
+      //   description:
+      //     "Standard deviation of sum-error-distance scores across all trials in the session",
+      // },
     };
 
     const translation: Translation = {
@@ -1280,45 +1386,103 @@ phase, participants report the location of dots on a grid.",
       numberOfTrials: number;
     },
   ) {
-    const dc = new DataCalc(data);
+    const dc = new DataCalc(data).filter(
+      (o) => o.quit_button_pressed === false,
+    );
 
-    const distances = data.map((obs) => {
-      const presentedCells = obs.presented_cells as Array<Cell>;
-      const selectedCells = obs.selected_cells as Array<Cell>;
-      // If there are no presented cells or selected cells, score the
-      // Hausdorff distance as null. This can happen if the user
-      // quits the game before placing any dots or before beginning
-      // a trial.
-      if (presentedCells.length === 0 || selectedCells.length === 0) {
-        return {
-          hausdorff_distance: null,
-        };
-      }
-      return {
-        hausdorff_distance: hausdorffDistance(presentedCells, selectedCells),
-      };
-    });
+    // Trials participant completed; remove quit trials from the count.
+    const n_trials = dc.filter((o) => o.quit_button_pressed === false).length;
 
     const scores = dc
+      .filter((o) => o.quit_button_pressed === false)
+      .mutate({
+        hausdorff_distance: (obs) => {
+          const presentedCells = obs.presented_cells as Array<Cell>;
+          const selectedCells = obs.selected_cells as Array<Cell>;
+          // If there are no presented cells or selected cells, score the
+          // distance as null. This can happen if the user quits the game
+          // before placing any dots or before beginning a trial.
+          if (presentedCells.length === 0 || selectedCells.length === 0) {
+            return null;
+          }
+          return hausdorffDistance(presentedCells, selectedCells);
+        },
+        euclidean_distance: (obs) => {
+          const presentedCells = obs.presented_cells as Array<Cell>;
+          const selectedCells = obs.selected_cells as Array<Cell>;
+          if (presentedCells.length === 0 || selectedCells.length === 0) {
+            return null;
+          }
+          return presentedCells.map((presentedCell, i) => {
+            return euclideanDistance(presentedCell, selectedCells[i]);
+          });
+        },
+        euclidean_distance_mean: (obs) => {
+          const presentedCells = obs.presented_cells as Array<Cell>;
+          const selectedCells = obs.selected_cells as Array<Cell>;
+          if (presentedCells.length === 0 || selectedCells.length === 0) {
+            return null;
+          }
+          return (
+            presentedCells
+              .map((presentedCell, i) => {
+                return euclideanDistance(presentedCell, selectedCells[i]);
+              })
+              .reduce((a: number, b: number) => a + b, 0) /
+            presentedCells.length
+          );
+        },
+        euclidean_distance_sum: (obs) => {
+          const presentedCells = obs.presented_cells as Array<Cell>;
+          const selectedCells = obs.selected_cells as Array<Cell>;
+          if (presentedCells.length === 0 || selectedCells.length === 0) {
+            return null;
+          }
+          return presentedCells
+            .map((presentedCell, i) => {
+              return euclideanDistance(presentedCell, selectedCells[i]);
+            })
+            .reduce((a: number, b: number) => a + b, 0);
+        },
+      })
       .summarize({
         activity_begin_iso8601_timestamp: this.beginIso8601Timestamp,
-        first_trial_begin_iso8601_timestamp: dc
-          .arrange("trial_begin_iso8601_timestamp")
+        first_trial_begin_iso8601_timestamp: arrange(
+          "trial_begin_iso8601_timestamp",
+        )
           .slice(0)
           .pull("trial_begin_iso8601_timestamp"),
-        last_trial_end_iso8601_timestamp: dc
-          .arrange("-trial_end_iso8601_timestamp")
+        last_trial_end_iso8601_timestamp: arrange(
+          "-trial_end_iso8601_timestamp",
+        )
           .slice(0)
           .pull("trial_end_iso8601_timestamp"),
-        n_trials: dc.length,
-        flag_trials_match_expected: dc.length === extras.numberOfTrials ? 1 : 0,
-        distance_hausdorff_median: median(
-          new DataCalc(distances).pull("hausdorff_distance"),
-        ),
-        n_trials_exact_targets: dc.filter(
+        n_trials: n_trials,
+        flag_trials_match_expected: n_trials === extras.numberOfTrials ? 1 : 0,
+        flag_trials_lt_expected: n_trials < extras.numberOfTrials ? 1 : 0,
+        flag_trials_gt_expected: n_trials > extras.numberOfTrials ? 1 : 0,
+        n_trials_exact_targets: filter(
           (obs) => obs.number_of_correct_dots === extras.numberOfDots,
         ).length,
         sum_exact_targets: sum("number_of_correct_dots"),
+        metric_error_distance_hausdorff_mean: mean("hausdorff_distance"),
+        metric_error_distance_hausdorff_median: median("hausdorff_distance"),
+        metric_error_distance_hausdorff_min: min("hausdorff_distance"),
+        metric_error_distance_hausdorff_max: max("hausdorff_distance"),
+        metric_error_distance_hausdorff_sum: sum("hausdorff_distance"),
+        metric_error_distance_hausdorff_std: sd("hausdorff_distance"),
+        // metric_error_distance_mean_mean: mean("euclidean_distance_mean"),
+        // metric_error_distance_mean_median: median("euclidean_distance_mean"),
+        // metric_error_distance_mean_min: min("euclidean_distance_mean"),
+        // metric_error_distance_mean_max: max("euclidean_distance_mean"),
+        // metric_error_distance_mean_sum: sum("euclidean_distance_mean"),
+        // metric_error_distance_mean_std: sd("euclidean_distance_mean"),
+        // metric_error_distance_sum_mean: mean("euclidean_distance_sum"),
+        // metric_error_distance_sum_median: median("euclidean_distance_sum"),
+        // metric_error_distance_sum_min: min("euclidean_distance_sum"),
+        // metric_error_distance_sum_max: max("euclidean_distance_sum"),
+        // metric_error_distance_sum_sum: sum("euclidean_distance_sum"),
+        // metric_error_distance_sum_std: sd("euclidean_distance_sum"),
       })
       .mutate({
         percent_exact_targets: (obs) =>
@@ -1335,15 +1499,15 @@ interface Cell {
   column: number;
 }
 
+function euclideanDistance(cell1: Cell, cell2: Cell): number {
+  const rowDiff = cell1.row - cell2.row;
+  const columnDiff = cell1.column - cell2.column;
+  return Math.sqrt(rowDiff * rowDiff + columnDiff * columnDiff);
+}
+
 function hausdorffDistance(setA: Cell[], setB: Cell[]): number {
   if (setA.length === 0 || setB.length === 0) {
     return Infinity;
-  }
-
-  function euclideanDistance(cell1: Cell, cell2: Cell): number {
-    const rowDiff = cell1.row - cell2.row;
-    const columnDiff = cell1.column - cell2.column;
-    return Math.sqrt(rowDiff * rowDiff + columnDiff * columnDiff);
   }
 
   function maxMinDistance(fromSet: Cell[], toSet: Cell[]): number {

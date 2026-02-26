@@ -16,8 +16,8 @@ const a4 = new SymbolSearch();
 const a5 = new CliStarter();
 const survey = new Survey(surveyJson);
 
-a1.setParameters({ show_quit_button: true });
-a2.setParameters({ show_quit_button: true });
+a1.setParameters({ show_quit_button: true, scoring: true });
+a2.setParameters({ show_quit_button: true, scoring: true });
 a3.setParameters({ show_quit_button: true, scoring: true });
 a4.setParameters({ show_quit_button: true, scoring: true });
 

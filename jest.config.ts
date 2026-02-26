@@ -1,7 +1,15 @@
 import type { JestConfigWithTsJest } from "ts-jest";
 import { jsWithTsESM } from "ts-jest/presets/index.js";
 
+const isCI = process.env.CI === "true";
+
 const jestConfig: JestConfigWithTsJest = {
+  // Set maxWorkers to a lower value and workerIdleMemoryLimit to 512MB for
+  // CI environments to prevent CPU overload and out of memory errors in
+  // GitHub Actions.
+  maxWorkers: isCI ? 3 : "50%",
+  workerIdleMemoryLimit: isCI ? "512MB" : "1GB",
+
   extensionsToTreatAsEsm: [".ts"],
   collectCoverage: true,
   collectCoverageFrom: [
@@ -12,6 +20,10 @@ const jestConfig: JestConfigWithTsJest = {
     "packages/data-calc/src/**/*.{js,jsx,ts,tsx}",
     // This re-exports from other files in the package, no need to test
     "!packages/data-calc/src/index.ts",
+    "packages/assessment-color-shapes/src/**/*.{js,jsx,ts,tsx}",
+    "packages/assessment-symbol-search/src/**/*.{js,jsx,ts,tsx}",
+    "packages/assessment-grid-memory/src/**/*.{js,jsx,ts,tsx}",
+    "packages/assessment-color-dots/src/**/*.{js,jsx,ts,tsx}",
     /**
      * The next two files are excluded from coverage because they are
      * related to how the physics package does module augmentation of
@@ -22,6 +34,7 @@ const jestConfig: JestConfigWithTsJest = {
     "!packages/physics/src/M2NodeExtended.ts",
     "packages/build-helpers/src/**/*.{js,jsx,ts,tsx}",
     "!**/src/__tests__/**",
+    "!**/src/runner.ts",
     "!**/*.d.ts",
   ],
   verbose: true,
@@ -221,6 +234,150 @@ const jestConfig: JestConfigWithTsJest = {
             tsconfig: "./packages/build-helpers/tsconfig.json",
           },
         ],
+      },
+    },
+    {
+      displayName: { name: "@m2c2kit/assessment-color-shapes", color: "blue" },
+      roots: ["<rootDir>/packages/assessment-color-shapes"],
+      moduleFileExtensions: ["ts", "tsx", "js", "jsx"],
+      testMatch: [
+        "<rootDir>/packages/assessment-color-shapes/src/__tests__/**/*.(spec|test).(ts|tsx|js)",
+      ],
+      testPathIgnorePatterns: [".rollup.cache", "build"],
+      transform: {
+        "^.+\\.tsx?$": [
+          "ts-jest",
+          {
+            useESM: true,
+            testLocationInResults: false,
+            tsconfig: "tsconfig.json",
+            diagnostics: {
+              ignoreCodes: [1343],
+            },
+            astTransformers: {
+              before: [
+                {
+                  path: "ts-jest-mock-import-meta",
+                  options: {
+                    metaObjectReplacement: { url: "https://www.url.com" },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+      testEnvironment: "node",
+      moduleNameMapper: {
+        "@m2c2kit/(.*)$": "<rootDir>/packages/$1/src",
+      },
+    },
+    {
+      displayName: { name: "@m2c2kit/assessment-symbol-search", color: "blue" },
+      roots: ["<rootDir>/packages/assessment-symbol-search"],
+      moduleFileExtensions: ["ts", "tsx", "js", "jsx"],
+      testMatch: [
+        "<rootDir>/packages/assessment-symbol-search/src/__tests__/**/*.(spec|test).(ts|tsx|js)",
+      ],
+      testPathIgnorePatterns: [".rollup.cache", "build"],
+      transform: {
+        "^.+\\.tsx?$": [
+          "ts-jest",
+          {
+            useESM: true,
+            testLocationInResults: false,
+            tsconfig: "tsconfig.json",
+            diagnostics: {
+              ignoreCodes: [1343],
+            },
+            astTransformers: {
+              before: [
+                {
+                  path: "ts-jest-mock-import-meta",
+                  options: {
+                    metaObjectReplacement: { url: "https://www.url.com" },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+      testEnvironment: "node",
+      moduleNameMapper: {
+        "@m2c2kit/(.*)$": "<rootDir>/packages/$1/src",
+      },
+    },
+    {
+      displayName: { name: "@m2c2kit/assessment-grid-memory", color: "blue" },
+      roots: ["<rootDir>/packages/assessment-grid-memory"],
+      moduleFileExtensions: ["ts", "tsx", "js", "jsx"],
+      testMatch: [
+        "<rootDir>/packages/assessment-grid-memory/src/__tests__/**/*.(spec|test).(ts|tsx|js)",
+      ],
+      testPathIgnorePatterns: [".rollup.cache", "build"],
+      transform: {
+        "^.+\\.tsx?$": [
+          "ts-jest",
+          {
+            useESM: true,
+            testLocationInResults: false,
+            tsconfig: "tsconfig.json",
+            diagnostics: {
+              ignoreCodes: [1343],
+            },
+            astTransformers: {
+              before: [
+                {
+                  path: "ts-jest-mock-import-meta",
+                  options: {
+                    metaObjectReplacement: { url: "https://www.url.com" },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+      testEnvironment: "node",
+      moduleNameMapper: {
+        "@m2c2kit/(.*)$": "<rootDir>/packages/$1/src",
+      },
+    },
+    {
+      displayName: { name: "@m2c2kit/assessment-color-dots", color: "blue" },
+      roots: ["<rootDir>/packages/assessment-color-dots"],
+      moduleFileExtensions: ["ts", "tsx", "js", "jsx"],
+      testMatch: [
+        "<rootDir>/packages/assessment-color-dots/src/__tests__/**/*.(spec|test).(ts|tsx|js)",
+      ],
+      testPathIgnorePatterns: [".rollup.cache", "build"],
+      transform: {
+        "^.+\\.tsx?$": [
+          "ts-jest",
+          {
+            useESM: true,
+            testLocationInResults: false,
+            tsconfig: "tsconfig.json",
+            diagnostics: {
+              ignoreCodes: [1343],
+            },
+            astTransformers: {
+              before: [
+                {
+                  path: "ts-jest-mock-import-meta",
+                  options: {
+                    metaObjectReplacement: { url: "https://www.url.com" },
+                  },
+                },
+              ],
+            },
+          },
+        ],
+      },
+      testEnvironment: "node",
+      moduleNameMapper: {
+        "@m2c2kit/(.*)$": "<rootDir>/packages/$1/src",
       },
     },
   ],

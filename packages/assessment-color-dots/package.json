@@ -13,7 +13,8 @@
     "build": "npm run clean && tsc && rollup -c && npm run schemas",
     "serve": "concurrently \"rollup -c rollup.config.runner.mjs --watch --configServe\" \"tsc --project tsconfig.runner.json --watch\" --names rollup,typescript --prefix-colors auto,red",
     "schemas": "node ../schema-util/build/index.js list --schema=all --files=src/index.ts --format=json-schema --title=\"Color Dots version __VERSION__\" > schemas.json",
-    "clean": "rimraf build dist .rollup.cache tsconfig.tsbuildinfo tsconfig.runner.tsbuildinfo"
+    "clean": "rimraf build dist .rollup.cache tsconfig.tsbuildinfo tsconfig.runner.tsbuildinfo",
+    "test": "cd ../.. && npx env-cmd -f .env.jest jest --selectProjects @m2c2kit/assessment-color-dots"
   },
   "main": "./dist/index.js",
   "module": "./dist/index.js",

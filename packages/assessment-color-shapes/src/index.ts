@@ -30,7 +30,15 @@ import {
   InstructionsOptions,
   LocalePicker,
 } from "@m2c2kit/addons";
-import { DataCalc } from "@m2c2kit/data-calc";
+import {
+  arrange,
+  DataCalc,
+  filter,
+  median,
+  parens,
+  scalar,
+  sd,
+} from "@m2c2kit/data-calc";
 
 /**
  * Color Shapes is a visual array change detection task, measuring intra-item
@@ -160,6 +168,15 @@ class ColorShapes extends Game implements ScoringProvider {
         type: "boolean",
         default: false,
         description: "Should scoring data be generated? Default is false.",
+      },
+      scoring_filter_response_time_duration_ms: {
+        type: "array",
+        items: {
+          type: "number",
+        },
+        default: [100, 10000],
+        description:
+          "When scoring, values of response_time_duration_ms less than the lower bound or greater than the upper bound are discarded. This array contains two numbers, the lower and upper bounds.",
       },
     };
 
@@ -312,6 +329,16 @@ class ColorShapes extends Game implements ScoringProvider {
         description:
           "ISO 8601 timestamp at the end of the last trial. Null if no trials were completed.",
       },
+      response_time_filter_lower_bound: {
+        type: "number",
+        description:
+          "Response times less than this lower bound were discarded when calculating filtered response times.",
+      },
+      response_time_filter_upper_bound: {
+        type: "number",
+        description:
+          "Response times greater than this upper bound were discarded when calculating filtered response times.",
+      },
       n_trials: {
         type: "integer",
         description: "Number of trials completed.",
@@ -333,6 +360,197 @@ class ColorShapes extends Game implements ScoringProvider {
         type: ["number", "null"],
         description:
           "Participant-facing score, calculated as (number of correct trials / number of trials attempted) * 100. This is a simple metric to provide feedback to the participant. Null if no trials attempted.",
+      },
+      flag_trials_lt_expected: {
+        type: "number",
+        description:
+          "Is the number of completed trials fewer than expected? 1 = true, 0 = false.",
+      },
+      flag_trials_gt_expected: {
+        type: "number",
+        description:
+          "Is the number of completed trials greater than expected? 1 = true, 0 = false.",
+      },
+      n_trials_HIT: {
+        type: "number",
+        description:
+          "Number of HIT trials (correctly identified a 'different' trial)",
+      },
+      n_trials_MISS: {
+        type: "number",
+        description:
+          "Number of MISS trials (failed to detect a 'different' trial, responded 'same')",
+      },
+      n_trials_FA: {
+        type: "number",
+        description:
+          "Number of False Alarm trials (incorrectly responded 'different' on a 'same' trial)",
+      },
+      n_trials_CR: {
+        type: "number",
+        description:
+          "Number of Correct Rejection trials (correctly responded 'same' on a 'same' trial)",
+      },
+      n_trials_type_same: {
+        type: "number",
+        description:
+          "Number of trials where the true signal type was 'SAME' (presented and response shapes were identical)",
+      },
+      n_trials_type_different: {
+        type: "number",
+        description:
+          "Number of trials where the true signal type was 'DIFFERENT' (response shapes differed from presented)",
+      },
+      HIT_rate: {
+        type: ["number", "null"],
+        description:
+          "Proportion of 'different' trials correctly identified as different. Calculated as n_trials_HIT / n_trials_type_different",
+      },
+      MISS_rate: {
+        type: ["number", "null"],
+        description:
+          "Proportion of 'different' trials incorrectly identified as same. Calculated as 1 - HIT_rate",
+      },
+      FA_rate: {
+        type: ["number", "null"],
+        description:
+          "Proportion of 'same' trials incorrectly identified as different. Calculated as n_trials_FA / n_trials_type_same",
+      },
+      CR_rate: {
+        type: ["number", "null"],
+        description:
+          "Proportion of 'same' trials correctly identified as same. Calculated as 1 - FA_rate",
+      },
+
+      n_trials_rt_invalid: {
+        type: "number",
+        description:
+          "Number of trials with null or non-positive response times (excluded from RT calculations)",
+      },
+      median_rt_overall_valid: {
+        type: ["number", "null"],
+        description:
+          "Median response time (ms) across all trials with valid (non-null, positive) response times. No outlier filtering applied",
+      },
+      sd_rt_overall_valid: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time (ms) across all trials with valid response times. No outlier filtering applied",
+      },
+      median_rt_HIT_valid: {
+        type: ["number", "null"],
+        description:
+          "Median response time (ms) for HIT trials with valid response times. No outlier filtering",
+      },
+      sd_rt_HIT_valid: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time (ms) for HIT trials with valid response times. No outlier filtering",
+      },
+      median_rt_MISS_valid: {
+        type: ["number", "null"],
+        description:
+          "Median response time (ms) for MISS trials with valid response times. No outlier filtering",
+      },
+      sd_rt_MISS_valid: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time (ms) for MISS trials with valid response times. No outlier filtering",
+      },
+      median_rt_FA_valid: {
+        type: ["number", "null"],
+        description:
+          "Median response time (ms) for False Alarm trials with valid response times. No outlier filtering",
+      },
+      sd_rt_FA_valid: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time (ms) for False Alarm trials with valid response times. No outlier filtering",
+      },
+      median_rt_CR_valid: {
+        type: ["number", "null"],
+        description:
+          "Median response time (ms) for Correct Rejection trials with valid response times. No outlier filtering",
+      },
+      sd_rt_CR_valid: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time (ms) for Correct Rejection trials with valid response times. No outlier filtering",
+      },
+      median_rt_overall_valid_filtered: {
+        type: ["number", "null"],
+        description:
+          "Median response time (ms) across all valid trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      sd_rt_overall_valid_filtered: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time (ms) across all valid trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      n_outliers_rt_overall_valid: {
+        type: "number",
+        description:
+          "Number of valid trials removed as RT outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      median_rt_HIT_valid_filtered: {
+        type: ["number", "null"],
+        description:
+          "Median response time (ms) for HIT trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      sd_rt_HIT_valid_filtered: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time (ms) for HIT trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      n_outliers_rt_HIT_valid: {
+        type: "number",
+        description:
+          "Number of HIT trials removed as RT outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      median_rt_MISS_valid_filtered: {
+        type: ["number", "null"],
+        description:
+          "Median response time (ms) for MISS trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      sd_rt_MISS_valid_filtered: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time (ms) for MISS trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      n_outliers_rt_MISS_valid: {
+        type: "number",
+        description:
+          "Number of MISS trials removed as RT outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      median_rt_FA_valid_filtered: {
+        type: ["number", "null"],
+        description:
+          "Median response time (ms) for False Alarm trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      sd_rt_FA_valid_filtered: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time (ms) for False Alarm trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      n_outliers_rt_FA_valid: {
+        type: "number",
+        description:
+          "Number of False Alarm trials removed as RT outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      median_rt_CR_valid_filtered: {
+        type: ["number", "null"],
+        description:
+          "Median response time (ms) for Correct Rejection trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      sd_rt_CR_valid_filtered: {
+        type: ["number", "null"],
+        description:
+          "Standard deviation of response time (ms) for Correct Rejection trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
+      },
+      n_outliers_rt_CR_valid: {
+        type: ["number", "null"],
+        description:
+          "Number of Correct Rejection trials removed as RT outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
       },
     };
 
@@ -511,6 +729,12 @@ phases.`,
           // empty data to calculateScores so a "blank" set of scores is
           // generated.
           const scores = game.calculateScores([], {
+            rtLowerBound: game.getParameter<Array<number>>(
+              "scoring_filter_response_time_duration_ms",
+            )[0],
+            rtUpperBound: game.getParameter<Array<number>>(
+              "scoring_filter_response_time_duration_ms",
+            )[1],
             numberOfTrials: game.getParameter<number>("number_of_trials"),
           });
           game.addScoringData(scores);
@@ -1061,6 +1285,12 @@ phases.`,
       } else {
         if (game.getParameter<boolean>("scoring")) {
           const scores = game.calculateScores(game.data.trials, {
+            rtLowerBound: game.getParameter<Array<number>>(
+              "scoring_filter_response_time_duration_ms",
+            )[0],
+            rtUpperBound: game.getParameter<Array<number>>(
+              "scoring_filter_response_time_duration_ms",
+            )[1],
             numberOfTrials: game.getParameter<number>("number_of_trials"),
           });
           game.addScoringData(scores);
@@ -1114,32 +1344,331 @@ phases.`,
   calculateScores(
     data: ActivityKeyValueData[],
     extras: {
+      rtLowerBound: number;
+      rtUpperBound: number;
       numberOfTrials: number;
     },
   ) {
     const dc = new DataCalc(data);
+
+    // Trials participant completed; remove quit trials from the count.
+    const n_trials = dc.filter((o) => o.quit_button_pressed === false).length;
+
+    // mutate to add metric fields, then summarize
     const scores = dc
+      .mutate({
+        metric_accuracy: (obs) => {
+          const ur = obs.user_response;
+          const uc = obs.user_response_correct;
+          if (ur === "same" && uc === true) return "CR";
+          if (ur === "same" && uc === false) return "MISS";
+          if (ur === "different" && uc === true) return "HIT";
+          if (ur === "different" && uc === false) return "FA";
+          return null;
+        },
+        metric_trial_type: (obs) => {
+          const ur = obs.user_response;
+          const uc = obs.user_response_correct;
+          if (ur === "same" && uc === true) return "SAME";
+          if (ur === "same" && uc === false) return "DIFFERENT";
+          if (ur === "different" && uc === true) return "DIFFERENT";
+          if (ur === "different" && uc === false) return "SAME";
+          return null;
+        },
+        is_valid: (obs) =>
+          typeof obs.response_time_duration_ms === "number" &&
+          obs.response_time_duration_ms > 0,
+      })
       .summarize({
         activity_begin_iso8601_timestamp: this.beginIso8601Timestamp,
-        first_trial_begin_iso8601_timestamp: dc
-          .arrange("trial_begin_iso8601_timestamp")
+        first_trial_begin_iso8601_timestamp: arrange(
+          "trial_begin_iso8601_timestamp",
+        )
           .slice(0)
           .pull("trial_begin_iso8601_timestamp"),
-        last_trial_end_iso8601_timestamp: dc
-          .arrange("-trial_end_iso8601_timestamp")
+        last_trial_end_iso8601_timestamp: arrange(
+          "-trial_end_iso8601_timestamp",
+        )
           .slice(0)
           .pull("trial_end_iso8601_timestamp"),
-        n_trials: dc.length,
-        flag_trials_match_expected: dc.length === extras.numberOfTrials ? 1 : 0,
-        n_trials_correct: dc.filter((obs) => obs.user_response_correct === true)
+        n_trials: n_trials,
+        flag_trials_match_expected: n_trials === extras.numberOfTrials ? 1 : 0,
+        flag_trials_lt_expected: n_trials < extras.numberOfTrials ? 1 : 0,
+        flag_trials_gt_expected: n_trials > extras.numberOfTrials ? 1 : 0,
+
+        // counts by accuracy
+        n_trials_HIT: filter((o) => o.metric_accuracy === "HIT").length,
+        n_trials_MISS: filter((o) => o.metric_accuracy === "MISS").length,
+        n_trials_FA: filter((o) => o.metric_accuracy === "FA").length,
+        n_trials_CR: filter((o) => o.metric_accuracy === "CR").length,
+
+        // trial types
+        n_trials_type_same: filter((o) => o.metric_trial_type === "SAME")
           .length,
-        n_trials_incorrect: dc.filter(
-          (obs) => obs.user_response_correct === false,
+        n_trials_type_different: filter(
+          (o) => o.metric_trial_type === "DIFFERENT",
         ).length,
-      })
-      .mutate({
-        participant_score: (obs) =>
-          obs.n_trials > 0 ? (obs.n_trials_correct / obs.n_trials) * 100 : null,
+
+        // Note: When the summarize operation is a custom function,
+        // () => value, rather than a built in function like sum or mean,
+        // we must provide the DataCalc object as an argument to the
+        // function, and do the filtering and pulling of values on that
+        // object within the function. Specifically below, we must do:
+        //   const denom = d.filter(...).length
+        // NOT
+        //   const denom = filter(...).length
+
+        // rates
+        HIT_rate: (d: DataCalc) => {
+          const denom = d.filter(
+            (o) => o.metric_trial_type === "DIFFERENT",
+          ).length;
+          return denom > 0
+            ? d.filter((o) => o.metric_accuracy === "HIT").length / denom
+            : null;
+        },
+        MISS_rate: (d: DataCalc) => {
+          const denom = d.filter(
+            (o) => o.metric_trial_type === "DIFFERENT",
+          ).length;
+          return denom > 0
+            ? 1 - d.filter((o) => o.metric_accuracy === "HIT").length / denom
+            : null;
+        },
+        FA_rate: (d: DataCalc) => {
+          const denom = d.filter((o) => o.metric_trial_type === "SAME").length;
+          return denom > 0
+            ? d.filter((o) => o.metric_accuracy === "FA").length / denom
+            : null;
+        },
+        CR_rate: (d: DataCalc) => {
+          const denom = d.filter((o) => o.metric_trial_type === "SAME").length;
+          return denom > 0
+            ? 1 - d.filter((o) => o.metric_accuracy === "FA").length / denom
+            : null;
+        },
+
+        // response time summaries
+        // overall valid RTs (>0)
+        median_rt_overall_valid: median(
+          filter((o) => o.is_valid).pull("response_time_duration_ms"),
+        ),
+        sd_rt_overall_valid: sd(
+          filter((o) => o.is_valid).pull("response_time_duration_ms"),
+        ),
+
+        // filtered overall RTs
+        median_rt_overall_valid_filtered: median(
+          filter((o) => o.is_valid)
+            .filter(
+              (o) =>
+                o.response_time_duration_ms >= extras.rtLowerBound &&
+                o.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        sd_rt_overall_valid_filtered: sd(
+          filter((o) => o.is_valid)
+            .filter(
+              (o) =>
+                o.response_time_duration_ms >= extras.rtLowerBound &&
+                o.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+
+        // counts of invalid/outliers
+        n_trials_rt_invalid: filter((o) => !o.is_valid).length,
+        n_outliers_rt_overall_valid: filter((o) => o.is_valid).filter(
+          (o) =>
+            o.response_time_duration_ms < extras.rtLowerBound ||
+            o.response_time_duration_ms > extras.rtUpperBound,
+        ).length,
+
+        response_time_filter_lower_bound: extras.rtLowerBound,
+        response_time_filter_upper_bound: extras.rtUpperBound,
+
+        // per-metric RT summaries
+        median_rt_HIT_valid: median(
+          filter((o) => o.is_valid)
+            .filter((o) => o.metric_accuracy === "HIT")
+            .pull("response_time_duration_ms"),
+        ),
+        sd_rt_HIT_valid: sd(
+          filter((o) => o.is_valid)
+            .filter((o) => o.metric_accuracy === "HIT")
+            .pull("response_time_duration_ms"),
+        ),
+        median_rt_HIT_valid_filtered: median(
+          filter((o) => o.is_valid)
+            .filter(
+              (o) =>
+                o.metric_accuracy === "HIT" &&
+                o.response_time_duration_ms >= extras.rtLowerBound &&
+                o.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        sd_rt_HIT_valid_filtered: sd(
+          filter((o) => o.is_valid)
+            .filter(
+              (o) =>
+                o.metric_accuracy === "HIT" &&
+                o.response_time_duration_ms >= extras.rtLowerBound &&
+                o.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        n_outliers_rt_HIT_valid: filter((o) => o.is_valid)
+          .filter((o) => o.metric_accuracy === "HIT")
+          .filter(
+            (o) =>
+              o.response_time_duration_ms < extras.rtLowerBound ||
+              o.response_time_duration_ms > extras.rtUpperBound,
+          ).length,
+        median_rt_MISS_valid: median(
+          filter((o) => o.is_valid)
+            .filter((o) => o.metric_accuracy === "MISS")
+            .pull("response_time_duration_ms"),
+        ),
+        sd_rt_MISS_valid: sd(
+          filter((o) => o.is_valid)
+            .filter((o) => o.metric_accuracy === "MISS")
+            .pull("response_time_duration_ms"),
+        ),
+        median_rt_MISS_valid_filtered: median(
+          filter((o) => o.is_valid)
+            .filter(
+              (o) =>
+                o.metric_accuracy === "MISS" &&
+                o.response_time_duration_ms >= extras.rtLowerBound &&
+                o.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        sd_rt_MISS_valid_filtered: sd(
+          filter((o) => o.is_valid)
+            .filter(
+              (o) =>
+                o.metric_accuracy === "MISS" &&
+                o.response_time_duration_ms >= extras.rtLowerBound &&
+                o.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        n_outliers_rt_MISS_valid: filter((o) => o.is_valid)
+          .filter((o) => o.metric_accuracy === "MISS")
+          .filter(
+            (o) =>
+              o.response_time_duration_ms < extras.rtLowerBound ||
+              o.response_time_duration_ms > extras.rtUpperBound,
+          ).length,
+
+        median_rt_FA_valid: median(
+          filter((o) => o.is_valid)
+            .filter((o) => o.metric_accuracy === "FA")
+            .pull("response_time_duration_ms"),
+        ),
+        sd_rt_FA_valid: sd(
+          filter((o) => o.is_valid)
+            .filter((o) => o.metric_accuracy === "FA")
+            .pull("response_time_duration_ms"),
+        ),
+        median_rt_FA_valid_filtered: median(
+          filter((o) => o.is_valid)
+            .filter(
+              (o) =>
+                o.metric_accuracy === "FA" &&
+                o.response_time_duration_ms >= extras.rtLowerBound &&
+                o.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        sd_rt_FA_valid_filtered: sd(
+          filter((o) => o.is_valid)
+            .filter(
+              (o) =>
+                o.metric_accuracy === "FA" &&
+                o.response_time_duration_ms >= extras.rtLowerBound &&
+                o.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        n_outliers_rt_FA_valid: filter((o) => o.is_valid)
+          .filter((o) => o.metric_accuracy === "FA")
+          .filter(
+            (o) =>
+              o.response_time_duration_ms < extras.rtLowerBound ||
+              o.response_time_duration_ms > extras.rtUpperBound,
+          ).length,
+
+        median_rt_CR_valid: median(
+          filter((o) => o.is_valid)
+            .filter((o) => o.metric_accuracy === "CR")
+            .pull("response_time_duration_ms"),
+        ),
+        sd_rt_CR_valid: sd(
+          filter((o) => o.is_valid)
+            .filter((o) => o.metric_accuracy === "CR")
+            .pull("response_time_duration_ms"),
+        ),
+        median_rt_CR_valid_filtered: median(
+          filter((o) => o.is_valid)
+            .filter(
+              (o) =>
+                o.metric_accuracy === "CR" &&
+                o.response_time_duration_ms >= extras.rtLowerBound &&
+                o.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        sd_rt_CR_valid_filtered: sd(
+          filter((o) => o.is_valid)
+            .filter(
+              (o) =>
+                o.metric_accuracy === "CR" &&
+                o.response_time_duration_ms >= extras.rtLowerBound &&
+                o.response_time_duration_ms <= extras.rtUpperBound,
+            )
+            .pull("response_time_duration_ms"),
+        ),
+        n_outliers_rt_CR_valid: filter((o) => o.is_valid)
+          .filter((o) => o.metric_accuracy === "CR")
+          .filter(
+            (o) =>
+              o.response_time_duration_ms < extras.rtLowerBound ||
+              o.response_time_duration_ms > extras.rtUpperBound,
+          ).length,
+
+        n_trials_correct: filter(
+          (o) => o.metric_accuracy === "HIT" || o.metric_accuracy === "CR",
+        ).length,
+        n_trials_incorrect: filter(
+          (o) => o.metric_accuracy === "MISS" || o.metric_accuracy === "FA",
+        ).length,
+        participant_score: (d: DataCalc) => {
+          const total = d.length;
+          if (total === 0) return null;
+
+          // for this metric, both HITs and CRs are considered correct, so we add
+          // those together for the numerator, and the denominator is total trials.
+          // Then we multiply by 100 to get a percentage. Namely:
+          // ((#HIT + #CR) / total) * 100
+          // Note the need to use parens() and scalar() to do the math operations,
+          // and passing in the DataCalc object as an argument to the function,
+          // because this is a custom function within summarize.
+          return d
+            .summarize({
+              correct: parens(
+                scalar(d.filter((o) => o.metric_accuracy === "HIT").length).add(
+                  scalar(d.filter((o) => o.metric_accuracy === "CR").length),
+                ),
+              )
+                .div(scalar(total))
+                .mul(scalar(100)),
+            })
+            .pull("correct");
+        },
       });
     return scores.observations;
   }
