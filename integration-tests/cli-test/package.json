@@ -20,5 +20,8 @@
     "name": "Scott T. Yabiku",
     "email": "syabiku@gmail.com"
   },
-  "homepage": "https://m2c2-project.github.io/m2c2kit"
+  "homepage": "https://m2c2-project.github.io/m2c2kit",
+  "engines": {
+    "node": ">=22"
+  }
 }

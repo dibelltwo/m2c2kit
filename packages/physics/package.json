@@ -45,6 +45,6 @@
   },
   "homepage": "https://m2c2-project.github.io/m2c2kit",
   "engines": {
-    "node": ">=18"
+    "node": ">=22"
   }
 }

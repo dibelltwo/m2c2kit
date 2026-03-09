@@ -11,7 +11,7 @@
     "m2ac": "./dist/automation-controller.js"
   },
   "engines": {
-    "node": ">=16.0.0"
+    "node": ">=22"
   },
   "scripts": {
     "build": "npm run clean && npm run compile && npm run copy-files",

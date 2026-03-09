@@ -21,5 +21,8 @@
     "url": "https://github.com/m2c2-project/m2c2kit.git",
     "directory": "packages/assessments-registry"
   },
-  "homepage": "https://m2c2-project.github.io/m2c2kit"
+  "homepage": "https://m2c2-project.github.io/m2c2kit",
+  "engines": {
+    "node": ">=22"
+  }
 }
