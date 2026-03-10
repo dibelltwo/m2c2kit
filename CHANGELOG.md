@@ -4,6 +4,151 @@ All notable changes to this project will be documented in this file.
 
 The format is based on [Keep a Changelog](https://keepachangelog.com/en/1.1.0/).
 
+## `@m2c2kit/core` [0.3.36] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/addons` [0.3.35] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/session` [0.3.18] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/physics` [0.1.23] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/data-calc` [0.8.7] - 2026-03-10
+
+### Added
+
+- Allow chaining and lazy evaluation to summary operations to improve ergonomics.
+
+### Changed
+
+- When there are no observations meeting a filter, it is common that a pull method returns no observations. This is not necessarily an error. Now the warning for this will be printed only if the `warnings` option in `DataCalcOptions` is set to true.
+- Updated dependencies.
+
+## `@m2c2kit/cli` [0.3.35] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/schematics` [0.1.35] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/embedding` [1.0.29] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/build-helpers` [0.3.32] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/db` [0.3.30] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/survey` [0.3.31] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/schema-util` [0.1.26] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessments-registry` [0.1.15] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessment-symbol-search` [0.8.34] - 2026-03-10
+
+### Added
+
+- Scoring code tests to compare with python outputs.
+
+### Changed
+
+- Added scores to replicate the python scoring.
+- Updated dependencies.
+
+## `@m2c2kit/assessment-grid-memory` [0.8.34] - 2026-03-10
+
+### Added
+
+- Scoring code tests to compare with python outputs.
+
+### Changed
+
+- Added scores to replicate the python scoring.
+- Updated dependencies.
+
+## `@m2c2kit/assessment-color-shapes` [0.8.34] - 2026-03-10
+
+### Added
+
+- Scoring code tests to compare with python outputs.
+
+### Changed
+
+- Added scores to replicate the python scoring.
+- Updated dependencies.
+
+## `@m2c2kit/assessment-color-dots` [0.8.34] - 2026-03-10
+
+### Added
+
+- Scoring code tests to compare with python outputs.
+
+### Changed
+
+- Added scores to replicate the python scoring.
+- Updated dependencies.
+
+## `@m2c2kit/assessments-demo` [0.8.31] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/assessment-cli-starter` [0.8.32] - 2026-03-10
+
+### Changed
+
+- Updated dependencies.
+
+## `@m2c2kit/test-helpers` [0.1.0] - 2026-03-10
+
+### Added
+
+- This is a new package with helper methods for testing scoring code. This is for internal use only.
+
 ## `@m2c2kit/core` [0.3.35] - 2026-01-28
 
 ### Added
