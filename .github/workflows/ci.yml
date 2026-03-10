@@ -56,7 +56,7 @@ jobs:
               - 'docs/**'
               - 'scripts/**'
               # schematics js build artifacts are placed alongside ts files; ignore them
-              - 'packages/schematics/src/**/**.js'
+              - 'packages/schematics/src/**/*.js'
               - 'examples/no-js-bundler-development/modules/**'
               - 'examples/android-simple-webview/**'
               - 'examples/ios-simple-webview/**'
