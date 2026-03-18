@@ -134,7 +134,7 @@ class GridMemory extends Game implements ScoringProvider {
       },
       scoring: {
         type: "boolean",
-        default: false,
+        default: true,
         description: "Should scoring data be generated? Default is false.",
       },
       seed: {
@@ -142,6 +142,18 @@ class GridMemory extends Game implements ScoringProvider {
         default: null,
         description:
           "Optional seed for the seeded pseudo-random number generator. When null, the default Math.random() is used.",
+      },
+      prompt_id: {
+        type: "string",
+        default: "",
+        description:
+          "EMA prompt UUID that triggered this session. Set by the EMA shell at session start.",
+      },
+      show_instructions: {
+        type: "boolean",
+        default: false,
+        description:
+          "Show instructions before the assessment. Default false for EMA repeat sessions.",
       },
     };
 
@@ -313,6 +325,15 @@ class GridMemory extends Game implements ScoringProvider {
       quit_button_pressed: {
         type: "boolean",
         description: "Was the quit button pressed?",
+      },
+      participant_id: {
+        type: "string",
+        description:
+          "Study participant identifier, set at session level via addStaticTrialData.",
+      },
+      prompt_id: {
+        type: "string",
+        description: "EMA prompt UUID that triggered this session.",
       },
     };
 
@@ -694,6 +715,7 @@ phase, participants report the location of dots on a grid.",
         game.addScene(blankScene);
         game.presentScene(blankScene);
         game.addTrialData("quit_button_pressed", true);
+        game.addTrialData("prompt_id", game.getParameter<string>("prompt_id"));
         game.trialComplete();
         if (game.getParameter<boolean>("scoring")) {
           // Score the data only if user does not quit. If user quits, pass
@@ -771,14 +793,16 @@ phase, participants report the location of dots on a grid.",
         ],
       });
     }
-    instructionsScenes[0].onAppear(() => {
-      // in case user quits before starting trial, record the timestamp
-      game.addTrialData(
-        "activity_begin_iso8601_timestamp",
-        this.beginIso8601Timestamp,
-      );
-    });
-    game.addScenes(instructionsScenes);
+    if (game.getParameter<boolean>("show_instructions")) {
+      instructionsScenes[0].onAppear(() => {
+        // in case user quits before starting trial, record the timestamp
+        game.addTrialData(
+          "activity_begin_iso8601_timestamp",
+          this.beginIso8601Timestamp,
+        );
+      });
+      game.addScenes(instructionsScenes);
+    }
 
     let forward_into_interference_scene_transition: Transition | undefined;
     let back_from_interference_scene_transition: Transition | undefined;
@@ -1322,6 +1346,7 @@ phase, participants report the location of dots on a grid.",
           .reduce((a: number, b) => a + b, 0);
         game.addTrialData("number_of_correct_dots", numberOfCorrectDots);
         game.addTrialData("quit_button_pressed", false);
+        game.addTrialData("prompt_id", game.getParameter<string>("prompt_id"));
         game.addTrialData("trial_index", game.trialIndex);
         game.trialComplete();
         if (game.trialIndex === game.getParameter("number_of_trials")) {

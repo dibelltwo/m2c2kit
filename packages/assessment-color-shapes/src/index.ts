@@ -120,7 +120,7 @@ class ColorShapes extends Game implements ScoringProvider {
         description: "Number of trials where the shapes have different colors.",
       },
       number_of_trials: {
-        default: 12,
+        default: 5,
         description: "How many trials to run.",
         type: "integer",
       },
@@ -166,7 +166,7 @@ class ColorShapes extends Game implements ScoringProvider {
       },
       scoring: {
         type: "boolean",
-        default: false,
+        default: true,
         description: "Should scoring data be generated? Default is false.",
       },
       scoring_filter_response_time_duration_ms: {
@@ -177,6 +177,18 @@ class ColorShapes extends Game implements ScoringProvider {
         default: [100, 10000],
         description:
           "When scoring, values of response_time_duration_ms less than the lower bound or greater than the upper bound are discarded. This array contains two numbers, the lower and upper bounds.",
+      },
+      prompt_id: {
+        type: "string",
+        default: "",
+        description:
+          "EMA prompt UUID that triggered this session. Set by the EMA shell at session start.",
+      },
+      show_instructions: {
+        type: "boolean",
+        default: false,
+        description:
+          "Show instructions before the assessment. Default false for EMA repeat sessions.",
       },
     };
 
@@ -307,6 +319,15 @@ class ColorShapes extends Game implements ScoringProvider {
       quit_button_pressed: {
         type: "boolean",
         description: "Was the quit button pressed?",
+      },
+      participant_id: {
+        type: "string",
+        description:
+          "Study participant identifier, set at session level via addStaticTrialData.",
+      },
+      prompt_id: {
+        type: "string",
+        description: "EMA prompt UUID that triggered this session.",
       },
     };
 
@@ -548,7 +569,7 @@ class ColorShapes extends Game implements ScoringProvider {
           "Standard deviation of response time (ms) for Correct Rejection trials after removing outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
       },
       n_outliers_rt_CR_valid: {
-        type: ["number", "null"],
+        type: "number",
         description:
           "Number of Correct Rejection trials removed as RT outliers, as specified in response_time_filter_lower_bound and response_time_filter_upper_bound.",
       },
@@ -723,6 +744,7 @@ phases.`,
         game.addScene(blankScene);
         game.presentScene(blankScene);
         game.addTrialData("quit_button_pressed", true);
+        game.addTrialData("prompt_id", game.getParameter<string>("prompt_id"));
         game.trialComplete();
         if (game.getParameter<boolean>("scoring")) {
           // Score the data only if user does not quit. If user quits, pass
@@ -830,15 +852,17 @@ phases.`,
         }
       }
     }
-    instructionsScenes[0].onAppear(() => {
-      // in case user quits before starting a trial, record the
-      // timestamp
-      game.addTrialData(
-        "activity_begin_iso8601_timestamp",
-        this.beginIso8601Timestamp,
-      );
-    });
-    game.addScenes(instructionsScenes);
+    if (game.getParameter<boolean>("show_instructions")) {
+      instructionsScenes[0].onAppear(() => {
+        // in case user quits before starting a trial, record the
+        // timestamp
+        game.addTrialData(
+          "activity_begin_iso8601_timestamp",
+          this.beginIso8601Timestamp,
+        );
+      });
+      game.addScenes(instructionsScenes);
+    }
 
     // ==============================================================
     // SCENE: countdown. Show 3 second countdown.
@@ -1267,6 +1291,7 @@ phases.`,
       });
       game.addTrialData("present_shapes", presentShapes);
       game.addTrialData("quit_button_pressed", false);
+      game.addTrialData("prompt_id", game.getParameter<string>("prompt_id"));
 
       const responseShapes = trialConfiguration.responseShapes.map((p) => {
         return {

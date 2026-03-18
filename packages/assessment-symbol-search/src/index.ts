@@ -89,7 +89,7 @@ positions.",
           "Duration, in milliseconds, of the slide in animation after the countdown phase.",
       },
       number_of_trials: {
-        default: 20,
+        default: 5,
         type: "integer",
         description: "How many trials to run.",
       },
@@ -140,7 +140,7 @@ positions.",
       },
       scoring: {
         type: "boolean",
-        default: false,
+        default: true,
         description: "Should scoring data be generated? Default is false.",
       },
       scoring_filter_response_time_duration_ms: {
@@ -157,6 +157,18 @@ positions.",
         default: null,
         description:
           "Optional seed for the seeded pseudo-random number generator. When null, the default Math.random() is used.",
+      },
+      prompt_id: {
+        type: "string",
+        default: "",
+        description:
+          "EMA prompt UUID that triggered this session. Set by the EMA shell at session start.",
+      },
+      show_instructions: {
+        type: "boolean",
+        default: false,
+        description:
+          "Show instructions before the assessment. Default false for EMA repeat sessions.",
       },
     };
 
@@ -259,6 +271,15 @@ positions.",
       quit_button_pressed: {
         type: "boolean",
         description: "Was the quit button pressed?",
+      },
+      participant_id: {
+        type: "string",
+        description:
+          "Study participant identifier, set at session level via addStaticTrialData.",
+      },
+      prompt_id: {
+        type: "string",
+        description: "EMA prompt UUID that triggered this session.",
       },
     };
 
@@ -770,6 +791,7 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
         game.addScene(blankScene);
         game.presentScene(blankScene);
         game.addTrialData("quit_button_pressed", true);
+        game.addTrialData("prompt_id", game.getParameter<string>("prompt_id"));
         game.trialComplete();
         if (game.getParameter<boolean>("scoring")) {
           // Score the data only if user does not quit. If user quits, pass
@@ -902,15 +924,17 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
         }
       }
     }
-    instructionsScenes[0].onAppear(() => {
-      // in case user quits before starting a trial, record the
-      // timestamp
-      game.addTrialData(
-        "activity_begin_iso8601_timestamp",
-        this.beginIso8601Timestamp,
-      );
-    });
-    game.addScenes(instructionsScenes);
+    if (game.getParameter<boolean>("show_instructions")) {
+      instructionsScenes[0].onAppear(() => {
+        // in case user quits before starting a trial, record the
+        // timestamp
+        game.addTrialData(
+          "activity_begin_iso8601_timestamp",
+          this.beginIso8601Timestamp,
+        );
+      });
+      game.addScenes(instructionsScenes);
+    }
 
     const afterTrialSceneTransition = Transition.slide({
       direction: TransitionDirection.Left,
@@ -1314,6 +1338,7 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
         } = trialConfiguration;
         game.addTrialData("card_configuration", remaining_trial_configuration);
         game.addTrialData("quit_button_pressed", false);
+        game.addTrialData("prompt_id", game.getParameter<string>("prompt_id"));
         game.addTrialData("trial_index", game.trialIndex);
         game.trialComplete();
         if (game.trialIndex < game.getParameter<number>("number_of_trials")) {
@@ -1324,7 +1349,7 @@ Mogle, Jinshil Hyun, Elizabeth Munoz, Joshua M. Smyth, and Richard B. Lipton. \
             chooseCardScene.run(
               Action.sequence([
                 Action.wait({
-                  duration: game.getParameter("interstimulus_interval_ms"),
+                  duration: game.getParameter("interstimulus_interval_duration_ms"),
                 }),
                 Action.custom({
                   callback: () => {
