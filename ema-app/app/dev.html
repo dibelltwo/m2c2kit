@@ -1,0 +1,102 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>M2C2 EMA — Dev Preview</title>
+    <style>
+      * {
+        margin: 0;
+        padding: 0;
+        box-sizing: border-box;
+      }
+      body {
+        font-family: system-ui, sans-serif;
+        background: #1a1a2e;
+        color: #eee;
+      }
+
+      #controls {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 1000;
+        background: rgba(0, 0, 0, 0.85);
+        padding: 10px 16px;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        flex-wrap: wrap;
+        border-bottom: 1px solid #333;
+      }
+      #controls h2 {
+        font-size: 13px;
+        color: #aaa;
+        white-space: nowrap;
+      }
+      select,
+      button {
+        font-size: 13px;
+        padding: 6px 12px;
+        border-radius: 6px;
+        border: none;
+        cursor: pointer;
+      }
+      select {
+        background: #333;
+        color: #eee;
+      }
+      button.primary {
+        background: #4f8ef7;
+        color: #fff;
+        font-weight: 600;
+      }
+      button.primary:hover {
+        background: #3a7ae6;
+      }
+      button.secondary {
+        background: #444;
+        color: #eee;
+      }
+      #status {
+        font-size: 12px;
+        color: #aaa;
+        margin-left: auto;
+      }
+      #status span {
+        color: #7ef7a0;
+        font-weight: 600;
+      }
+
+      #app {
+        width: 100%;
+        height: 100vh;
+        padding-top: 48px; /* below controls bar */
+      }
+      #app canvas,
+      #app > * {
+        width: 100% !important;
+        height: calc(100vh - 48px) !important;
+      }
+    </style>
+  </head>
+  <body>
+    <div id="controls">
+      <h2>EMA Dev Preview</h2>
+      <select id="assessment-picker">
+        <option value="color-dots">Color Dots</option>
+        <option value="color-shapes">Color Shapes</option>
+        <option value="grid-memory">Grid Memory</option>
+        <option value="symbol-search">Symbol Search</option>
+      </select>
+      <button class="primary" id="btn-start">▶ Fire SESSION_START</button>
+      <button class="secondary" id="btn-show-instructions">
+        Show Instructions
+      </button>
+      <div id="status">Status: <span id="status-text">idle</span></div>
+    </div>
+    <div id="app"></div>
+    <script type="module" src="index.js"></script>
+  </body>
+</html>
