@@ -5,10 +5,11 @@
  */
 
 export interface ContextSnapshot {
-  snapshot_id: string;           // UUID
-  prompt_id: string;             // FK → PromptLogEntry.prompt_id
+  snapshot_id: string; // UUID
+  prompt_id: string; // FK → PromptLogEntry.prompt_id
+  study_id: string; // needed for server-side routing without a join
   participant_id: string;
-  captured_at: string;           // ISO 8601
+  captured_at: string; // ISO 8601
 
   // GPS
   latitude: number | null;
@@ -16,7 +17,7 @@ export interface ContextSnapshot {
   gps_accuracy_meters: number | null;
 
   // Device state
-  battery_level: number | null;  // 0.0–1.0
+  battery_level: number | null; // 0.0–1.0
   is_charging: boolean | null;
   network_type: "wifi" | "cellular" | "none" | null;
 }

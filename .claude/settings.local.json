@@ -2,7 +2,26 @@
   "permissions": {
     "allow": [
       "Bash(echo $PATH)",
-      "Read(//opt/homebrew/**)"
+      "Read(//opt/homebrew/**)",
+      "Bash(git -C /Users/jongwonlee/gitrepos/m2c2kit diff packages/assessment-color-dots/src/index.ts packages/assessment-color-shapes/src/index.ts packages/assessment-grid-memory/src/index.ts packages/assessment-symbol-search/src/index.ts2)",
+      "Bash(git -C /Users/jongwonlee/gitrepos/m2c2kit diff HEAD packages/assessment-color-dots/src/index.ts packages/assessment-color-shapes/src/index.ts packages/assessment-grid-memory/src/index.ts packages/assessment-symbol-search/src/index.ts)",
+      "Bash(git:*)",
+      "Bash(node -e \"const p=require\\(''/Users/jongwonlee/gitrepos/m2c2kit/packages/session/package.json''\\); console.log\\(p.version\\)\")",
+      "Bash(node -e \"const p=require\\(''/Users/jongwonlee/gitrepos/m2c2kit/packages/db/package.json''\\); console.log\\(p.version\\)\")",
+      "Bash(node -e \"const p=require\\(''/Users/jongwonlee/gitrepos/m2c2kit/packages/embedding/package.json''\\); console.log\\(p.version\\)\")",
+      "Bash(node -e \"const p=require\\(''/Users/jongwonlee/gitrepos/m2c2kit/packages/assessment-color-dots/package.json''\\); console.log\\(p.version\\)\")",
+      "Bash(find /Users/jongwonlee/gitrepos/m2c2kit/packages/core -name *.js -path */dist/*eeee22)",
+      "Bash(npm install:*)",
+      "Bash(/usr/local/bin/npm install:*)",
+      "Bash(command -v npm)",
+      "Read(//usr/local/bin/**)",
+      "Read(//Users/jongwonlee/**)",
+      "Bash(export NVM_DIR=\"$HOME/.nvm\")",
+      "Bash(. \"$NVM_DIR/nvm.sh\")",
+      "Bash(npm run:*)",
+      "Bash(pkill -f \"rollup\\\\|livereload\\\\|concurrently.*ema\")",
+      "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
+      "Read(//private/tmp/**)"
     ]
   }
 }

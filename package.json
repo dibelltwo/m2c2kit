@@ -25,7 +25,8 @@
     "packages/session",
     "packages/assessments-registry",
     "packages/data-calc",
-    "packages/test-helpers"
+    "packages/test-helpers",
+    "ema-app/app"
   ],
   "scripts": {
     "build": "node scripts/build-all.mjs",

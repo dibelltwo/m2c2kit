@@ -1,0 +1,434 @@
+openapi: "3.0.3"
+info:
+  title: M2C2 EMA API
+  version: "0.1.0"
+  description: REST API between the EMA mobile app (Data & Sync Agent 04) and the backend server (Backend Agent 05).
+
+servers:
+  - url: https://api.m2c2kit-ema.example.com/v1
+    description: Production
+  - url: http://localhost:3000/v1
+    description: Local development
+
+security:
+  - bearerAuth: []
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+
+  schemas:
+    Participant:
+      type: object
+      required: [participant_id, study_id]
+      properties:
+        participant_id:
+          type: string
+        study_id:
+          type: string
+        enrolled_at:
+          type: string
+          format: date-time
+
+    StudyProtocol:
+      type: object
+      description: Mirrors StudyProtocol in study-protocol.schema.ts
+      required:
+        [
+          study_id,
+          study_uuid,
+          version,
+          schedule,
+          assessments,
+          context_collection,
+        ]
+      properties:
+        study_id:
+          type: string
+        study_uuid:
+          type: string
+          format: uuid
+        version:
+          type: integer
+        schedule:
+          type: object
+        assessments:
+          type: array
+          items:
+            type: object
+        context_collection:
+          type: object
+
+    SessionUpload:
+      type: object
+      required:
+        [
+          session_uuid,
+          participant_id,
+          study_id,
+          prompt_id,
+          activity_id,
+          trials,
+          scoring,
+        ]
+      properties:
+        session_uuid:
+          type: string
+          format: uuid
+        participant_id:
+          type: string
+        study_id:
+          type: string
+        prompt_id:
+          type: string
+        activity_id:
+          type: string
+        activity_version:
+          type: string
+        started_at:
+          type: string
+          format: date-time
+        ended_at:
+          type: string
+          format: date-time
+        canceled:
+          type: boolean
+        trials:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+        scoring:
+          type: array
+          items:
+            type: object
+            additionalProperties: true
+
+    PromptLogEntry:
+      type: object
+      description: Mirrors PromptLogEntry in prompt-log.schema.ts
+      required: [prompt_id, participant_id, study_id, status]
+      properties:
+        prompt_id:
+          type: string
+        participant_id:
+          type: string
+        study_id:
+          type: string
+        status:
+          type: string
+          enum:
+            [
+              scheduled,
+              sent,
+              opened,
+              started,
+              completed,
+              quit_early,
+              missed,
+              expired,
+            ]
+        scheduled_for:
+          type: string
+          format: date-time
+        sent_at:
+          type: string
+          format: date-time
+        opened_at:
+          type: string
+          format: date-time
+        started_at:
+          type: string
+          format: date-time
+        completed_at:
+          type: string
+          format: date-time
+        expired_at:
+          type: string
+          format: date-time
+        n_trials_completed:
+          type: integer
+          nullable: true
+        quit_early:
+          type: boolean
+          nullable: true
+
+    ContextSnapshot:
+      type: object
+      description: Mirrors ContextSnapshot in context-snapshot.schema.ts
+      required: [snapshot_id, prompt_id, study_id, participant_id, captured_at]
+      properties:
+        snapshot_id:
+          type: string
+          format: uuid
+        prompt_id:
+          type: string
+        study_id:
+          type: string
+        participant_id:
+          type: string
+        captured_at:
+          type: string
+          format: date-time
+        latitude:
+          type: number
+          nullable: true
+        longitude:
+          type: number
+          nullable: true
+        gps_accuracy_meters:
+          type: number
+          nullable: true
+        battery_level:
+          type: number
+          nullable: true
+          minimum: 0
+          maximum: 1
+        is_charging:
+          type: boolean
+          nullable: true
+        network_type:
+          type: string
+          enum: [wifi, cellular, none]
+          nullable: true
+
+    SyncStatus:
+      type: object
+      required: [session_uuids, prompt_ids, snapshot_ids]
+      properties:
+        session_uuids:
+          type: array
+          items:
+            type: string
+          description: UUIDs of sessions already received by the server.
+        prompt_ids:
+          type: array
+          items:
+            type: string
+          description: prompt_ids of log entries already received.
+        snapshot_ids:
+          type: array
+          items:
+            type: string
+          description: snapshot_ids already received.
+
+    Error:
+      type: object
+      required: [error]
+      properties:
+        error:
+          type: string
+        detail:
+          type: string
+
+paths:
+  /participants:
+    post:
+      summary: Register a new participant
+      description: Called on first app launch. Returns a Bearer token for all subsequent requests.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [study_id]
+              properties:
+                study_id:
+                  type: string
+                device_id:
+                  type: string
+                  description: Optional stable device identifier for deduplication.
+      responses:
+        "201":
+          description: Participant registered.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [participant_id, token]
+                properties:
+                  participant_id:
+                    type: string
+                  token:
+                    type: string
+                    description: Bearer token for all subsequent API calls.
+        "400":
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /participants/{participant_id}/protocol:
+    get:
+      summary: Fetch the study protocol for a participant
+      description: Returns the current protocol. Supports conditional fetch — pass current version to get 304 if unchanged.
+      parameters:
+        - in: path
+          name: participant_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: current_version
+          required: false
+          schema:
+            type: integer
+          description: If provided and matches server version, returns 304 Not Modified.
+      responses:
+        "200":
+          description: Study protocol.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StudyProtocol"
+        "304":
+          description: Protocol unchanged since current_version.
+        "404":
+          description: Participant not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /sessions:
+    post:
+      summary: Upload a completed session's trial and scoring data
+      description: Idempotent on session_uuid — re-uploading the same UUID returns 200 with duplicate=true.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SessionUpload"
+      responses:
+        "201":
+          description: Session stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_uuid:
+                    type: string
+                  duplicate:
+                    type: boolean
+        "200":
+          description: Duplicate — session already received.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  session_uuid:
+                    type: string
+                  duplicate:
+                    type: boolean
+        "400":
+          description: Invalid payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /prompt-logs:
+    post:
+      summary: Upload prompt compliance log entries (batch)
+      description: Accepts an array. Upserts on prompt_id — safe to retry.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [entries]
+              properties:
+                entries:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/PromptLogEntry"
+      responses:
+        "200":
+          description: Entries upserted.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  upserted:
+                    type: integer
+        "400":
+          description: Invalid payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /context-snapshots:
+    post:
+      summary: Upload GPS/sensor context snapshots (batch)
+      description: Accepts an array. Idempotent on snapshot_id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [snapshots]
+              properties:
+                snapshots:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/ContextSnapshot"
+      responses:
+        "200":
+          description: Snapshots stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stored:
+                    type: integer
+        "400":
+          description: Invalid payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /participants/{participant_id}/sync-status:
+    get:
+      summary: Check what data the server has already received
+      description: Returns IDs already on the server so the client can skip redundant uploads.
+      parameters:
+        - in: path
+          name: participant_id
+          required: true
+          schema:
+            type: string
+        - in: query
+          name: since
+          required: false
+          schema:
+            type: string
+            format: date-time
+          description: Only return IDs uploaded after this timestamp (to limit response size).
+      responses:
+        "200":
+          description: Sync status.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+        "404":
+          description: Participant not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
