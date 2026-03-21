@@ -40,6 +40,9 @@ export class ApiClient {
   async uploadContextSnapshots(snapshots) {
     return this.post("/context-snapshots", { snapshots });
   }
+  async uploadSurveyResponses(responses) {
+    return this.post("/survey-responses", { responses });
+  }
   async getSyncStatus(participantId) {
     return this.get(`/participants/${participantId}/sync-status`);
   }

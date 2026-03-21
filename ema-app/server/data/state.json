@@ -1,0 +1,109 @@
+{
+  "participants": [
+    {
+      "participant_id": "P-10ed59d3",
+      "study_id": "dev-study",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwYXJ0aWNpcGFudF9pZCI6IlAtMTBlZDU5ZDMiLCJzdHVkeV9pZCI6ImRldi1zdHVkeSJ9.itUm48DB7sSho-rt45LFTmKjhdeCBLxVoNvei9irh-0",
+      "enrolled_at": "2026-03-21T04:30:03.192Z",
+      "device_id": "persist-001"
+    },
+    {
+      "participant_id": "P-c2c3950a",
+      "study_id": "dev-study",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwYXJ0aWNpcGFudF9pZCI6IlAtYzJjMzk1MGEiLCJzdHVkeV9pZCI6ImRldi1zdHVkeSJ9.bK5edacINiizFH3cTzFYJjg0SfQ7iwqmLtJ5CoGCW4k",
+      "enrolled_at": "2026-03-21T04:44:05.959Z",
+      "device_id": "sim-db-slice"
+    },
+    {
+      "participant_id": "P-f706b712",
+      "study_id": "dev-study",
+      "token": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJwYXJ0aWNpcGFudF9pZCI6IlAtZjcwNmI3MTIiLCJzdHVkeV9pZCI6ImRldi1zdHVkeSJ9.n35pU2rDoCF4RHUP8x5sl7Ex9UunPQUIuWmwB9NNyrA",
+      "enrolled_at": "2026-03-21T04:52:25.694Z",
+      "device_id": "sim-prototype-flow"
+    }
+  ],
+  "studyProtocols": [
+    {
+      "study_id": "dev-study",
+      "version": 1,
+      "protocol": {
+        "study_id": "dev-study",
+        "study_uuid": "06333433-d887-469e-b11a-f482acaec049",
+        "version": 1,
+        "schedule": {
+          "schedule_mode": "random_block",
+          "time_blocks": [
+            {
+              "start": "09:00",
+              "end": "21:00"
+            }
+          ],
+          "prompts_per_day": 5,
+          "randomize_within_window": true,
+          "expiry_minutes": 30,
+          "days_total": 14,
+          "min_gap_minutes": 30
+        },
+        "assessments": [],
+        "ema_survey": {
+          "survey_id": "ema-mood-stress",
+          "survey_version": 1,
+          "title": "EMA Check-in",
+          "items": []
+        },
+        "context_collection": {
+          "gps_on_prompt": false,
+          "gps_interval_minutes": null,
+          "collect_battery": false,
+          "collect_network_type": true
+        }
+      },
+      "updated_at": "2026-03-21T04:29:43.963Z"
+    }
+  ],
+  "promptLogs": [
+    {
+      "prompt_id": "prompt-3102-001",
+      "participant_id": "P-f706b712",
+      "study_id": "dev-study",
+      "status": "completed",
+      "sent_at": "2026-03-21T04:49:30Z",
+      "assessment_started_at": "2026-03-21T04:50:05Z",
+      "assessment_ended_at": "2026-03-21T04:51:00Z"
+    }
+  ],
+  "contextSnapshots": [],
+  "surveyResponses": [
+    {
+      "record_id": "resp-3102-001",
+      "participant_id": "P-f706b712",
+      "session_uuid": "session-3102-001",
+      "prompt_id": "prompt-3102-001",
+      "study_id": "dev-study",
+      "protocol_version": 1,
+      "survey_id": "ema-check-in",
+      "survey_version": 1,
+      "item_id": "mood",
+      "response_status": "answered",
+      "captured_at": "2026-03-21T04:50:45Z",
+      "response_value": {
+        "value": 4
+      }
+    }
+  ],
+  "sessions": [
+    {
+      "session_uuid": "session-3102-001",
+      "participant_id": "P-f706b712",
+      "study_id": "dev-study",
+      "prompt_id": "prompt-3102-001",
+      "protocol_version": 1,
+      "activity_id": "symbol-search",
+      "started_at": "2026-03-21T04:50:00Z",
+      "ended_at": "2026-03-21T04:51:00Z",
+      "trials": [],
+      "scoring": []
+    }
+  ],
+  "exportJobs": []
+}

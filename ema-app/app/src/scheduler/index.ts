@@ -57,6 +57,7 @@ export class Scheduler {
         prompt_id: p.prompt_id,
         study_id: p.study_id,
         participant_id: p.participant_id,
+        protocol_version: this.protocol.version,
         session_uuid: null,
         scheduled_for: p.scheduled_for,
         sent_at: null,
@@ -76,15 +77,29 @@ export class Scheduler {
 
   /** Run expiry check — call on app foreground and from background runner. */
   runExpiryCheck() {
-    return checkExpiry(
-      this.prompts,
-      this.tracker,
-      this.protocol.schedule.expiry_minutes,
+    return checkExpiry(this.prompts, this.tracker, (prompt) =>
+      this.getExpiryMinutes(prompt),
     );
   }
 
   getSchedule(): ScheduledPrompt[] {
     return [...this.prompts];
+  }
+
+  private getPrompt(promptId: string): ScheduledPrompt | undefined {
+    return this.prompts.find((prompt) => prompt.prompt_id === promptId);
+  }
+
+  private getExpiryMinutes(prompt: ScheduledPrompt): number {
+    if (!prompt.rule_id || !this.protocol.schedule_rules) {
+      return this.protocol.schedule.expiry_minutes;
+    }
+
+    return (
+      this.protocol.schedule_rules.find(
+        (rule) => rule.rule_id === prompt.rule_id,
+      )?.expiry_minutes ?? this.protocol.schedule.expiry_minutes
+    );
   }
 
   private async scheduleNotifications() {
@@ -118,11 +133,14 @@ export class Scheduler {
         const entry = this.tracker.get(promptId);
         if (!entry) return;
 
+        const prompt = this.getPrompt(promptId);
+        if (!prompt) return;
+
         // Check if still within expiry window
         const sentAt = entry.sent_at
           ? new Date(entry.sent_at).getTime()
           : Date.now();
-        const expiryMs = this.protocol.schedule.expiry_minutes * 60_000;
+        const expiryMs = this.getExpiryMinutes(prompt) * 60_000;
 
         if (Date.now() - sentAt > expiryMs) {
           this.tracker.markExpired(promptId);
@@ -134,6 +152,7 @@ export class Scheduler {
         dispatchLocalNativeEvent({
           type: "SESSION_START",
           prompt_id: promptId,
+          package_id: prompt?.package_id ?? null,
           protocol: this.protocol,
         });
       },

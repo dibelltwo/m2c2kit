@@ -1,9 +1,11 @@
 # Agent 03 — Scheduler & Compliance Engineer
 
 ## Role
+
 Implement EMA scheduling logic, local notification orchestration, and compliance tracking. You work in TypeScript (web/JS layer) and coordinate with the Native Platform Engineer for notification delivery. You do not write Kotlin or Swift.
 
 ## Owns
+
 ```
 ema-app/app/src/scheduler/
   index.ts              ← main scheduler entry
@@ -20,9 +22,15 @@ ema-app/app/public/background.js   ← background runner script (with Native age
 ### 1. Parse Protocol → Prompt Schedule
 
 ```typescript
-import type { StudyProtocol, ScheduledPrompt } from "../../contracts/study-protocol.schema";
+import type {
+  StudyProtocol,
+  ScheduledPrompt,
+} from "../../contracts/study-protocol.schema";
 
-export function generateSchedule(protocol: StudyProtocol, startDate: Date): ScheduledPrompt[] {
+export function generateSchedule(
+  protocol: StudyProtocol,
+  startDate: Date,
+): ScheduledPrompt[] {
   const prompts: ScheduledPrompt[] = [];
   for (let day = 0; day < protocol.schedule.days_total; day++) {
     const date = addDays(startDate, day);
@@ -47,7 +55,7 @@ EMA best practice: divide the day into equal sub-windows, pick one random time p
 function randomizeWithinWindows(
   date: Date,
   windows: TimeWindow[],
-  totalPrompts: number
+  totalPrompts: number,
 ): ScheduledPrompt[] {
   // Divide window span into N equal slots
   // Pick uniformly random time within each slot
@@ -63,11 +71,11 @@ import { LocalNotifications } from "@capacitor/local-notifications";
 export async function scheduleNotifications(prompts: ScheduledPrompt[]) {
   await LocalNotifications.schedule({
     notifications: prompts.map((p) => ({
-      id: hashToInt(p.prompt_id),         // LocalNotifications needs integer ID
+      id: hashToInt(p.prompt_id), // LocalNotifications needs integer ID
       title: "Time for your check-in",
       body: "Tap to complete a brief assessment.",
       schedule: { at: new Date(p.scheduled_for) },
-      extra: { prompt_id: p.prompt_id },  // passed back when user taps
+      extra: { prompt_id: p.prompt_id }, // passed back when user taps
     })),
   });
 }
@@ -113,7 +121,7 @@ addEventListener("checkSchedule", async (resolve, reject) => {
       // store back
     }
     if (p.status === "scheduled" && now > p.scheduled_for) {
-      p.status = "missed";  // notification was due but never sent (edge case)
+      p.status = "missed"; // notification was due but never sent (edge case)
     }
   }
 
@@ -140,11 +148,15 @@ export class ComplianceTracker {
   }
 
   async markSent(promptId: string) {
-    await this.updateStatus(promptId, "sent", { sent_at: new Date().toISOString() });
+    await this.updateStatus(promptId, "sent", {
+      sent_at: new Date().toISOString(),
+    });
   }
 
   async markOpened(promptId: string) {
-    await this.updateStatus(promptId, "opened", { opened_at: new Date().toISOString() });
+    await this.updateStatus(promptId, "opened", {
+      opened_at: new Date().toISOString(),
+    });
   }
 
   async markStarted(promptId: string, sessionUuid: string) {
@@ -178,12 +190,59 @@ export class ComplianceTracker {
 
 ## Compliance Metrics to Track
 
-| Metric | Formula |
-|--------|---------|
-| Response rate | `completed / (completed + missed + expired)` |
-| Completion rate | `completed / opened` |
-| Mean response latency | `opened_at - sent_at` (ms) |
-| Early quit rate | `quit_early / (completed + quit_early)` |
+| Metric                | Formula                                      |
+| --------------------- | -------------------------------------------- |
+| Response rate         | `completed / (completed + missed + expired)` |
+| Completion rate       | `completed / opened`                         |
+| Mean response latency | `opened_at - sent_at` (ms)                   |
+| Early quit rate       | `quit_early / (completed + quit_early)`      |
+
+### 6. Protocol Hot-Swap (Remote Update)
+
+When Data & Sync detects a new protocol version from the server, it emits `PROTOCOL_UPDATED` via the bridge. The Scheduler must handle this cleanly mid-study:
+
+```typescript
+import { LocalNotifications } from "@capacitor/local-notifications";
+
+export async function applyProtocolUpdate(newProtocol: StudyProtocol) {
+  // 1. Cancel all pending local notifications
+  const pending = await LocalNotifications.getPending();
+  if (pending.notifications.length > 0) {
+    await LocalNotifications.cancel({ notifications: pending.notifications });
+  }
+
+  // 2. Save new protocol locally
+  await Preferences.set({
+    key: "study_protocol",
+    value: JSON.stringify(newProtocol),
+  });
+
+  // 3. Regenerate schedule from today (do not backfill past days)
+  const today = new Date();
+  today.setHours(0, 0, 0, 0);
+  const newSchedule = generateSchedule(newProtocol, today);
+
+  // 4. Filter to future prompts only
+  const futurePrompts = newSchedule.filter(
+    (p) => new Date(p.scheduled_for) > new Date(),
+  );
+
+  // 5. Re-register notifications
+  await scheduleNotifications(futurePrompts);
+
+  // 6. Persist updated prompt list for background runner
+  await BackgroundRunner.setData({
+    key: "pending_prompts",
+    value: futurePrompts,
+  });
+}
+```
+
+**Caveats to handle:**
+
+- iOS caps local notifications at **64**. If the new protocol generates more, truncate to the nearest 64 future prompts and re-schedule in batches as they are consumed.
+- Prompts already `completed`, `missed`, or `expired` under the old protocol are **not** deleted — they remain in the compliance log for research integrity.
+- If the participant is mid-assessment when `PROTOCOL_UPDATED` fires, defer the hot-swap until `SESSION_LIFECYCLE: ended` is received.
 
 ## Integration Points
 
@@ -191,9 +250,12 @@ export class ComplianceTracker {
 - **Sends to Native Platform:** schedule of notifications to register, prompt_id on tap
 - **Sends to Data & Sync:** completed `PromptLogEntry` rows for server upload
 - **Receives from Assessment Engineer:** `session_uuid` and trial count after session ends (via bridge event `COMPLIANCE_UPDATE`)
+- **Receives from Data & Sync:** `PROTOCOL_UPDATED` event when server returns a newer protocol version
 
 ## Does NOT
+
 - Write Kotlin or Swift code
 - Store raw GPS data (that's Native Platform + Data & Sync)
 - Design the backend API
 - Render any UI
+- Fetch the protocol from the server (that's Data & Sync)

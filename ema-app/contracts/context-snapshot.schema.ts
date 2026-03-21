@@ -9,6 +9,7 @@ export interface ContextSnapshot {
   prompt_id: string; // FK → PromptLogEntry.prompt_id
   study_id: string; // needed for server-side routing without a join
   participant_id: string;
+  protocol_version: number | null;
   captured_at: string; // ISO 8601
 
   // GPS

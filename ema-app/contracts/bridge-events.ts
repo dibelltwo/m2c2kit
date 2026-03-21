@@ -15,7 +15,12 @@ import type { ContextSnapshot } from "./context-snapshot.schema";
 
 export type NativeToJSEvent =
   /** Native fires this when user taps a notification. Starts the m2c2kit session. */
-  | { type: "SESSION_START"; prompt_id: string; protocol: StudyProtocol }
+  | {
+      type: "SESSION_START";
+      prompt_id: string;
+      package_id?: string | null;
+      protocol: StudyProtocol;
+    }
   /** GPS + sensor data captured at prompt fire time, passed to WebView for storage. */
   | { type: "CONTEXT_SNAPSHOT"; snapshot: ContextSnapshot }
   /** Native informs JS that a prompt was sent (notification delivered). */

@@ -1,0 +1,154 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+model Study {
+  study_id     String                 @id
+  created_at   DateTime               @default(now())
+  updated_at   DateTime               @updatedAt
+
+  participants Participant[]
+  protocols    StudyProtocolVersion[]
+  exportJobs   ExportJob[]
+}
+
+model Participant {
+  participant_id String   @id
+  study_id       String
+  enrolled_at    DateTime @default(now())
+  token          String
+  device_id      String?
+  active         Boolean  @default(true)
+
+  study            Study               @relation(fields: [study_id], references: [study_id], onDelete: Cascade)
+  promptLogs       PromptLog[]
+  sessionUploads   SessionUpload[]
+  contextSnapshots ContextSnapshot[]
+  surveyResponses  SurveyItemResponse[]
+
+  @@index([study_id])
+}
+
+model StudyProtocolVersion {
+  id           String   @id @default(cuid())
+  study_id     String
+  version      Int
+  protocol_json Json
+  created_at   DateTime @default(now())
+  updated_at   DateTime @updatedAt
+
+  study Study @relation(fields: [study_id], references: [study_id], onDelete: Cascade)
+
+  @@unique([study_id, version])
+  @@index([study_id, created_at])
+}
+
+model PromptLog {
+  prompt_id               String   @id
+  participant_id          String
+  study_id                String?
+  protocol_version        Int?
+  session_uuid            String?
+  scheduled_for           DateTime?
+  sent_at                 DateTime?
+  opened_at               DateTime?
+  assessment_started_at   DateTime?
+  assessment_ended_at     DateTime?
+  status                  String?
+  quit_early              Boolean  @default(false)
+  n_trials_completed      Int?
+  context_snapshot_id     String?
+  uploaded_at             DateTime @default(now())
+
+  participant Participant @relation(fields: [participant_id], references: [participant_id], onDelete: Cascade)
+
+  @@index([participant_id])
+  @@index([study_id])
+}
+
+model SessionUpload {
+  session_uuid      String   @id
+  participant_id    String
+  study_id          String
+  prompt_id         String
+  protocol_version  Int?
+  activity_id       String
+  activity_version  String?
+  started_at        DateTime?
+  ended_at          DateTime?
+  canceled          Boolean?
+  trials_json       Json
+  scoring_json      Json
+  uploaded_at       DateTime @default(now())
+
+  participant Participant @relation(fields: [participant_id], references: [participant_id], onDelete: Cascade)
+
+  @@index([participant_id])
+  @@index([study_id])
+  @@index([prompt_id])
+}
+
+model ContextSnapshot {
+  snapshot_id         String   @id
+  prompt_id           String?
+  participant_id      String
+  study_id            String?
+  protocol_version    Int?
+  captured_at         DateTime?
+  latitude            Float?
+  longitude           Float?
+  gps_accuracy_meters Float?
+  battery_level       Float?
+  is_charging         Boolean?
+  network_type        String?
+  payload_json        Json?
+  uploaded_at         DateTime @default(now())
+
+  participant Participant @relation(fields: [participant_id], references: [participant_id], onDelete: Cascade)
+
+  @@index([participant_id])
+  @@index([prompt_id])
+}
+
+model SurveyItemResponse {
+  record_id         String   @id
+  session_uuid      String?
+  prompt_id         String?
+  participant_id    String
+  study_id          String?
+  protocol_version  Int?
+  survey_id         String
+  survey_version    Int?
+  item_id           String
+  response_status   String
+  response_value    Json?
+  captured_at       DateTime?
+  uploaded_at       DateTime @default(now())
+
+  participant Participant @relation(fields: [participant_id], references: [participant_id], onDelete: Cascade)
+
+  @@index([participant_id])
+  @@index([prompt_id])
+  @@index([session_uuid])
+  @@index([survey_id, survey_version])
+}
+
+model ExportJob {
+  job_id        String   @id
+  study_id      String
+  format        String
+  status        String
+  download_url  String?
+  error         String?
+  created_at    DateTime @default(now())
+  updated_at    DateTime @updatedAt
+
+  study Study @relation(fields: [study_id], references: [study_id], onDelete: Cascade)
+
+  @@index([study_id])
+}

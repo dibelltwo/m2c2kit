@@ -9,7 +9,21 @@ import { ColorDots } from "@m2c2kit/assessment-color-dots";
 import { ColorShapes } from "@m2c2kit/assessment-color-shapes";
 import { GridMemory } from "@m2c2kit/assessment-grid-memory";
 import { SymbolSearch } from "@m2c2kit/assessment-symbol-search";
+import { Survey } from "@m2c2kit/survey";
 import type { StudyProtocol } from "../../contracts/study-protocol.schema";
+import { buildEmaSurveyJson } from "./survey-protocol";
+import {
+  getAssessmentConfigsForPackage,
+  getAvailablePackages,
+  getDefaultPackage,
+  getSurveyConfigForPackage,
+} from "./package-protocol";
+import {
+  extractSurveyItemResponses,
+  persistSurveyItemResponses,
+} from "./data/survey-response";
+import { createDefaultProtocol } from "./setup/default-protocol";
+import { loadSavedProtocol, mountSetupUI } from "./setup/setup";
 
 // Stub out Capacitor global so @capacitor/core doesn't crash in browser
 (window as any).Capacitor = {
@@ -22,72 +36,30 @@ import type { StudyProtocol } from "../../contracts/study-protocol.schema";
 // Demo study protocol
 // ---------------------------------------------------------------------------
 
-const DEV_PROTOCOL: StudyProtocol = {
-  study_id: "dev-study",
-  study_uuid: crypto.randomUUID(),
-  version: 1,
-  schedule: {
-    windows: [{ start: "09:00", end: "21:00" }],
-    prompts_per_day: 5,
-    randomize_within_window: true,
-    expiry_minutes: 30,
-    days_total: 14,
-    min_gap_minutes: 30,
-  },
-  assessments: [
-    {
-      activity_id: "color-dots",
-      activity_version: "latest",
-      parameters: { number_of_trials: 3, scoring: true },
-      selection_strategy: "round_robin",
-      order: 0,
-    },
-    {
-      activity_id: "color-shapes",
-      activity_version: "latest",
-      // number_of_different_colors_trials must be <= number_of_trials
-      parameters: {
-        number_of_trials: 3,
-        number_of_different_colors_trials: 2,
-        scoring: true,
-      },
-      selection_strategy: "round_robin",
-      order: 1,
-    },
-    {
-      activity_id: "grid-memory",
-      activity_version: "latest",
-      parameters: { number_of_trials: 3, scoring: true },
-      selection_strategy: "round_robin",
-      order: 2,
-    },
-    {
-      activity_id: "symbol-search",
-      activity_version: "latest",
-      parameters: { number_of_trials: 3, scoring: true },
-      selection_strategy: "round_robin",
-      order: 3,
-    },
-  ],
-  context_collection: {
-    gps_on_prompt: false,
-    gps_interval_minutes: null,
-    collect_battery: false,
-    collect_network_type: true,
-  },
-};
+const DEFAULT_PROTOCOL: StudyProtocol = createDefaultProtocol();
 
 // ---------------------------------------------------------------------------
 // Assessment factory
 // ---------------------------------------------------------------------------
 
-type AnyAssessment = ColorDots | ColorShapes | GridMemory | SymbolSearch;
+type AnyAssessment =
+  | ColorDots
+  | ColorShapes
+  | GridMemory
+  | SymbolSearch
+  | Survey;
 
 const ASSESSMENT_MAP: Record<string, () => AnyAssessment> = {
   "color-dots": () => new ColorDots(),
   "color-shapes": () => new ColorShapes(),
   "grid-memory": () => new GridMemory(),
   "symbol-search": () => new SymbolSearch(),
+  "ema-survey": () =>
+    new Survey(
+      buildEmaSurveyJson(currentProtocol.ema_survey, {
+        protocol_version: currentProtocol.version,
+      }),
+    ),
 };
 
 // ---------------------------------------------------------------------------
@@ -95,6 +67,7 @@ const ASSESSMENT_MAP: Record<string, () => AnyAssessment> = {
 // ---------------------------------------------------------------------------
 
 let currentSession: Session | null = null;
+let currentProtocol: StudyProtocol = loadSavedProtocol() ?? DEFAULT_PROTOCOL;
 
 function setStatus(text: string) {
   const el = document.getElementById("status-text");
@@ -105,6 +78,8 @@ function setRunning(running: boolean) {
   (document.getElementById("assessment-picker") as HTMLSelectElement).disabled =
     running;
   (document.getElementById("btn-start") as HTMLButtonElement).disabled =
+    running;
+  (document.getElementById("btn-start-prompt") as HTMLButtonElement).disabled =
     running;
   (document.getElementById("btn-instructions") as HTMLButtonElement).disabled =
     running;
@@ -117,41 +92,181 @@ function clearCanvas() {
   if (app) app.innerHTML = "";
 }
 
+function renderStandby() {
+  const app = document.getElementById("app");
+  if (!app || currentSession) return;
+  const packages = getAvailablePackages(currentProtocol);
+  app.classList.remove("survey-mode");
+  app.classList.remove("setup-mode");
+  app.classList.add("standby-mode");
+  app.innerHTML = `
+    <section class="standby-shell">
+      <h2>Participant Standby</h2>
+      <p><strong>Study ID:</strong> ${currentProtocol.study_id}</p>
+      <p><strong>Protocol Version:</strong> ${currentProtocol.version}</p>
+      <p>Visible package types are shown below for dev/coordinator review. Use Setup to edit the protocol or launch a specific package from this standby screen.</p>
+      <div class="setup-pill-row">
+        ${packages
+          .map((pkg) => `<span class="setup-pill">${pkg.package_name}</span>`)
+          .join("")}
+      </div>
+      <div class="setup-actions" style="margin-top: 16px;">
+        ${packages
+          .map(
+            (pkg) => `
+              <button
+                type="button"
+                class="primary"
+                data-package-launch="${pkg.package_id}"
+              >
+                Launch ${pkg.package_name}
+              </button>
+            `,
+          )
+          .join("")}
+      </div>
+    </section>
+  `;
+
+  app
+    .querySelectorAll<HTMLButtonElement>("[data-package-launch]")
+    .forEach((button) => {
+      button.addEventListener("click", () => {
+        const packageId = button.dataset.packageLaunch;
+        if (!packageId) return;
+        void launchPromptSession(false, packageId);
+      });
+    });
+}
+
 function resetToIdle() {
   currentSession = null;
   setRunning(false);
+  document.getElementById("app")?.classList.remove("survey-mode");
+  document.getElementById("app")?.classList.remove("setup-mode");
   clearCanvas();
+  renderStandby();
 }
 
 // ---------------------------------------------------------------------------
 // Session management
 // ---------------------------------------------------------------------------
 
+function openSetup() {
+  if (currentSession) return;
+  const app = document.getElementById("app");
+  if (!app) return;
+  app.classList.add("setup-mode");
+  mountSetupUI(app, currentProtocol, (protocol) => {
+    currentProtocol = protocol;
+    setStatus(`saved protocol v${protocol.version}`);
+    renderStandby();
+  });
+}
+
+function applyAssessmentParameters(
+  game: Exclude<AnyAssessment, Survey>,
+  assessmentId: string,
+  promptId: string,
+  showInstructions: boolean,
+  packageId?: string,
+) {
+  const assessmentConfig = getAssessmentConfigsForPackage(
+    currentProtocol,
+    packageId,
+  ).find((a) => a.activity_id === assessmentId);
+  game.setParameters({
+    ...(assessmentConfig?.parameters ?? {}),
+    prompt_id: promptId,
+    protocol_version: currentProtocol.version,
+    show_instructions: showInstructions,
+  });
+}
+
+function createPromptActivities(
+  promptId: string,
+  showInstructions: boolean,
+  packageId?: string,
+): AnyAssessment[] {
+  const activities: AnyAssessment[] = getAssessmentConfigsForPackage(
+    currentProtocol,
+    packageId,
+  )
+    .slice()
+    .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+    .map((config) => {
+      const activity = ASSESSMENT_MAP[config.activity_id]?.();
+      if (!activity || activity instanceof Survey) {
+        throw new Error(`Unsupported prompt activity: ${config.activity_id}`);
+      }
+
+      applyAssessmentParameters(
+        activity,
+        config.activity_id,
+        promptId,
+        showInstructions,
+        packageId,
+      );
+      return activity;
+    });
+
+  const survey = new Survey();
+  survey.setParameters(
+    buildEmaSurveyJson(getSurveyConfigForPackage(currentProtocol, packageId), {
+      prompt_id: promptId,
+      study_id: currentProtocol.study_id,
+      protocol_version: currentProtocol.version,
+    }),
+  );
+  activities.push(survey);
+
+  return activities;
+}
+
 async function launchSession(assessmentId: string, showInstructions: boolean) {
   if (currentSession) return;
 
   const promptId = crypto.randomUUID();
+  document.getElementById("app")?.classList.remove("standby-mode");
   const assessment = ASSESSMENT_MAP[assessmentId]?.();
   if (!assessment) {
     console.error(`[Dev] Unknown assessment: ${assessmentId}`);
     return;
   }
 
-  const assessmentConfig = DEV_PROTOCOL.assessments.find(
-    (a) => a.activity_id === assessmentId,
-  );
+  const isSurvey = assessment instanceof Survey;
 
-  // setParameters takes raw values and wraps them in { default: v } internally
-  assessment.setParameters({
-    ...(assessmentConfig?.parameters ?? {}),
-    prompt_id: promptId,
-    show_instructions: showInstructions,
-  });
+  if (isSurvey) {
+    document.getElementById("app")?.classList.add("survey-mode");
+    assessment.setParameters(
+      buildEmaSurveyJson(getSurveyConfigForPackage(currentProtocol), {
+        prompt_id: promptId,
+        study_id: currentProtocol.study_id,
+        protocol_version: currentProtocol.version,
+      }),
+    );
+  } else {
+    applyAssessmentParameters(
+      assessment as Exclude<AnyAssessment, Survey>,
+      assessmentId,
+      promptId,
+      showInstructions,
+      undefined,
+    );
+  }
 
+  const localDb = new LocalDatabase();
   currentSession = new Session({
     activities: [assessment],
-    dataStores: [new LocalDatabase()],
+    dataStores: [localDb],
     rootElementId: "app",
+  });
+
+  currentSession.onActivityData((event) => {
+    const surveyResponses = extractSurveyItemResponses(event);
+    if (surveyResponses.length > 0) {
+      void persistSurveyItemResponses(localDb, surveyResponses);
+    }
   });
 
   // In browser, Embedding sets autoStartAfterInit=true — session starts
@@ -184,6 +299,58 @@ async function launchSession(assessmentId: string, showInstructions: boolean) {
   }
 }
 
+async function launchPromptSession(
+  showInstructions: boolean,
+  packageId = getDefaultPackage(currentProtocol)?.package_id,
+) {
+  if (currentSession) return;
+
+  const promptId = crypto.randomUUID();
+  const localDb = new LocalDatabase();
+  document.getElementById("app")?.classList.remove("standby-mode");
+
+  try {
+    currentSession = new Session({
+      activities: createPromptActivities(promptId, showInstructions, packageId),
+      dataStores: [localDb],
+      rootElementId: "app",
+    });
+
+    currentSession.onActivityData((event) => {
+      const surveyResponses = extractSurveyItemResponses(event);
+      if (surveyResponses.length > 0) {
+        void persistSurveyItemResponses(localDb, surveyResponses);
+      }
+    });
+
+    Embedding.initialize(currentSession, { host: "MobileWebView" });
+    setRunning(true);
+    setStatus(`loading prompt session${packageId ? ` — ${packageId}` : ""}…`);
+
+    currentSession.onStart(() => {
+      setStatus(`running — ${packageId ?? "default package"} prompt session`);
+      console.log(
+        `[Dev] Prompt session started | prompt_id=${promptId} | package_id=${packageId ?? "default"}`,
+      );
+    });
+
+    currentSession.onEnd(() => {
+      console.log("[Dev] Prompt session ended");
+      setStatus("done — ready for next prompt");
+      resetToIdle();
+    });
+
+    await currentSession.initialize();
+    console.log(
+      `[Dev] Initialized | full prompt session | prompt_id=${promptId} | package_id=${packageId ?? "default"}`,
+    );
+  } catch (err) {
+    console.error("[Dev] Failed to initialize full prompt session:", err);
+    setStatus(`error: ${(err as Error).message ?? String(err)}`);
+    resetToIdle();
+  }
+}
+
 function stopSession() {
   if (currentSession) currentSession.end();
 }
@@ -199,6 +366,12 @@ document.getElementById("btn-start")?.addEventListener("click", () => {
   launchSession(picker.value, false);
 });
 
+document.getElementById("btn-start-prompt")?.addEventListener("click", () => {
+  launchPromptSession(false);
+});
+
+document.getElementById("btn-setup")?.addEventListener("click", openSetup);
+
 document.getElementById("btn-instructions")?.addEventListener("click", () => {
   const picker = document.getElementById(
     "assessment-picker",
@@ -208,5 +381,6 @@ document.getElementById("btn-instructions")?.addEventListener("click", () => {
 
 document.getElementById("btn-stop")?.addEventListener("click", stopSession);
 
-setStatus("idle — pick an assessment");
+setStatus("idle — pick an assessment or run a prompt");
+renderStandby();
 console.log("[Dev] EMA prototype ready.");

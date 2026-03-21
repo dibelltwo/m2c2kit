@@ -7,14 +7,15 @@
 import type { PromptStatus } from "./bridge-events";
 
 export interface PromptLogEntry {
-  prompt_id: string;             // UUID
+  prompt_id: string; // UUID
   study_id: string;
   participant_id: string;
+  protocol_version: number | null;
 
   /** m2c2kit session_uuid — populated when assessment starts. */
   session_uuid: string | null;
 
-  scheduled_for: string;         // ISO 8601
+  scheduled_for: string; // ISO 8601
   sent_at: string | null;
   opened_at: string | null;
   assessment_started_at: string | null;

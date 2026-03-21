@@ -35,16 +35,17 @@ This document defines the agent team for building the Ecological Momentary Asses
 
 ## Agents
 
-| # | Agent | File | Primary Concern |
-|---|-------|------|-----------------|
-| 0 | **Protocol Architect** | `agents/00-protocol-architect.md` | Shared contracts, schemas, interfaces |
-| 1 | **Assessment Engineer** | `agents/01-assessment-engineer.md` | m2c2kit cognitive tasks & surveys |
-| 2 | **Native Platform Engineer** | `agents/02-native-platform-engineer.md` | Capacitor, Android, iOS, GPS, background |
-| 3 | **Scheduler & Compliance** | `agents/03-scheduler-compliance.md` | Notification scheduling, EMA protocol, compliance |
-| 4 | **Data & Sync Engineer** | `agents/04-data-sync-engineer.md` | On-device DB schema, server sync, prompt log |
-| 5 | **Backend Engineer** | `agents/05-backend-engineer.md` | REST API, server DB, participant management |
-| 6 | **Setup UI Engineer** | `agents/06-setup-ui-engineer.md` | Study configuration screen, assessment picker |
-| 7 | **Assessment Review Agent** | `agents/07-assessment-review-agent.md` | Audit assessments for EMA correctness, produce review report |
+| #   | Agent                             | File                                         | Primary Concern                                              |
+| --- | --------------------------------- | -------------------------------------------- | ------------------------------------------------------------ |
+| 0   | **Protocol Architect**            | `agents/00-protocol-architect.md`            | Shared contracts, schemas, interfaces                        |
+| 1   | **Assessment Engineer**           | `agents/01-assessment-engineer.md`           | m2c2kit cognitive tasks & surveys                            |
+| 2   | **Native Platform Engineer**      | `agents/02-native-platform-engineer.md`      | Capacitor, Android, iOS, GPS, background                     |
+| 3   | **Scheduler & Compliance**        | `agents/03-scheduler-compliance.md`          | Notification scheduling, EMA protocol, compliance            |
+| 4   | **Data & Sync Engineer**          | `agents/04-data-sync-engineer.md`            | On-device DB schema, server sync, prompt log                 |
+| 5   | **Backend Engineer**              | `agents/05-backend-engineer.md`              | REST API, server DB, participant management                  |
+| 6   | **Setup UI Engineer**             | `agents/06-setup-ui-engineer.md`             | Study configuration screen, assessment picker                |
+| 7   | **Assessment Review Agent**       | `agents/07-assessment-review-agent.md`       | Audit assessments for EMA correctness, produce review report |
+| 8   | **Researcher Dashboard Engineer** | `agents/08-researcher-dashboard-engineer.md` | Researcher-facing dashboard, protocol review, exports        |
 
 ---
 
@@ -65,14 +66,14 @@ ema-app/contracts/
 
 ## Development Phases
 
-| Phase | Lead Agent | Supporting Agents |
-|-------|-----------|------------------|
-| 1 — Contracts | Protocol Architect | all review |
-| 2 — Assessment + Shell | Assessment Engineer, Native Platform | — |
-| 3 — Scheduling | Scheduler & Compliance | Native Platform |
-| 4 — Data Layer | Data & Sync, Backend | Native Platform |
-| 5 — Setup UI | Setup UI | Protocol Architect |
-| 6 — Integration | all | — |
+| Phase                  | Lead Agent                           | Supporting Agents  |
+| ---------------------- | ------------------------------------ | ------------------ |
+| 1 — Contracts          | Protocol Architect                   | all review         |
+| 2 — Assessment + Shell | Assessment Engineer, Native Platform | —                  |
+| 3 — Scheduling         | Scheduler & Compliance               | Native Platform    |
+| 4 — Data Layer         | Data & Sync, Backend                 | Native Platform    |
+| 5 — Setup UI           | Setup UI                             | Protocol Architect |
+| 6 — Integration        | all                                  | —                  |
 
 ---
 

@@ -3,6 +3,7 @@ import type { EmaDatabase, SyncQueueItem } from "./ema-database";
 import type { ApiClient } from "./api-client";
 import type { PromptLogEntry } from "../../../contracts/prompt-log.schema";
 import type { ContextSnapshot } from "../../../contracts/context-snapshot.schema";
+import type { SurveyItemResponse } from "../../../contracts/survey-response.schema";
 
 const BATCH_SIZE = 50;
 const MAX_ATTEMPTS = 5;
@@ -42,6 +43,7 @@ export class SyncManager {
     try {
       await this.syncPromptLogs();
       await this.syncContextSnapshots();
+      await this.syncSurveyResponses();
       // activityResults sync handled separately (needs session assembly)
       this.lastSyncAt = Date.now();
       console.log("[Sync] Sync complete");
@@ -93,6 +95,26 @@ export class SyncManager {
       await this.uploadBatch(batch, async () => {
         const result = await this.api.uploadContextSnapshots(
           rows as ContextSnapshot[],
+        );
+        return ids.slice(0, result.stored);
+      });
+    }
+  }
+
+  private async syncSurveyResponses(): Promise<void> {
+    const pending = await this.db.getPendingSync("surveyResponses");
+    if (pending.length === 0) return;
+
+    for (const batch of chunk(pending, BATCH_SIZE)) {
+      const ids = batch.map((q) => q.record_id);
+      const rows = await this.db.surveyResponses
+        .where("record_id")
+        .anyOf(ids)
+        .toArray();
+
+      await this.uploadBatch(batch, async () => {
+        const result = await this.api.uploadSurveyResponses(
+          rows as SurveyItemResponse[],
         );
         return ids.slice(0, result.stored);
       });

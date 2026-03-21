@@ -8,162 +8,276 @@ import { ColorDots } from "@m2c2kit/assessment-color-dots";
 import { ColorShapes } from "@m2c2kit/assessment-color-shapes";
 import { GridMemory } from "@m2c2kit/assessment-grid-memory";
 import { SymbolSearch } from "@m2c2kit/assessment-symbol-search";
+import { Survey } from "@m2c2kit/survey";
+import { buildEmaSurveyJson } from "./survey-protocol";
+import { getAssessmentConfigsForPackage, getAvailablePackages, getDefaultPackage, getSurveyConfigForPackage, } from "./package-protocol";
+import { extractSurveyItemResponses, persistSurveyItemResponses, } from "./data/survey-response";
+import { createDefaultProtocol } from "./setup/default-protocol";
+import { loadSavedProtocol, mountSetupUI } from "./setup/setup";
 // Stub out Capacitor global so @capacitor/core doesn't crash in browser
 window.Capacitor = {
-  isNativePlatform: () => false,
-  getPlatform: () => "web",
-  isPluginAvailable: () => false,
+    isNativePlatform: () => false,
+    getPlatform: () => "web",
+    isPluginAvailable: () => false,
 };
 // ---------------------------------------------------------------------------
 // Demo study protocol
 // ---------------------------------------------------------------------------
-const DEV_PROTOCOL = {
-  study_id: "dev-study",
-  study_uuid: crypto.randomUUID(),
-  version: 1,
-  schedule: {
-    windows: [{ start: "09:00", end: "21:00" }],
-    prompts_per_day: 5,
-    randomize_within_window: true,
-    expiry_minutes: 30,
-    days_total: 14,
-    min_gap_minutes: 30,
-  },
-  assessments: [
-    {
-      activity_id: "color-dots",
-      activity_version: "latest",
-      parameters: { number_of_trials: 3, scoring: true },
-      selection_strategy: "round_robin",
-      order: 0,
-    },
-    {
-      activity_id: "color-shapes",
-      activity_version: "latest",
-      // number_of_different_colors_trials must be <= number_of_trials
-      parameters: {
-        number_of_trials: 3,
-        number_of_different_colors_trials: 2,
-        scoring: true,
-      },
-      selection_strategy: "round_robin",
-      order: 1,
-    },
-    {
-      activity_id: "grid-memory",
-      activity_version: "latest",
-      parameters: { number_of_trials: 3, scoring: true },
-      selection_strategy: "round_robin",
-      order: 2,
-    },
-    {
-      activity_id: "symbol-search",
-      activity_version: "latest",
-      parameters: { number_of_trials: 3, scoring: true },
-      selection_strategy: "round_robin",
-      order: 3,
-    },
-  ],
-  context_collection: {
-    gps_on_prompt: false,
-    gps_interval_minutes: null,
-    collect_battery: false,
-    collect_network_type: true,
-  },
-};
+const DEFAULT_PROTOCOL = createDefaultProtocol();
 const ASSESSMENT_MAP = {
-  "color-dots": () => new ColorDots(),
-  "color-shapes": () => new ColorShapes(),
-  "grid-memory": () => new GridMemory(),
-  "symbol-search": () => new SymbolSearch(),
+    "color-dots": () => new ColorDots(),
+    "color-shapes": () => new ColorShapes(),
+    "grid-memory": () => new GridMemory(),
+    "symbol-search": () => new SymbolSearch(),
+    "ema-survey": () => new Survey(buildEmaSurveyJson(currentProtocol.ema_survey, {
+        protocol_version: currentProtocol.version,
+    })),
 };
 // ---------------------------------------------------------------------------
 // UI helpers
 // ---------------------------------------------------------------------------
 let currentSession = null;
+let currentProtocol = loadSavedProtocol() ?? DEFAULT_PROTOCOL;
 function setStatus(text) {
-  const el = document.getElementById("status-text");
-  if (el) el.textContent = text;
+    const el = document.getElementById("status-text");
+    if (el)
+        el.textContent = text;
 }
 function setRunning(running) {
-  document.getElementById("assessment-picker").disabled = running;
-  document.getElementById("btn-start").disabled = running;
-  document.getElementById("btn-instructions").disabled = running;
-  document.getElementById("btn-stop").disabled = !running;
+    document.getElementById("assessment-picker").disabled =
+        running;
+    document.getElementById("btn-start").disabled =
+        running;
+    document.getElementById("btn-start-prompt").disabled =
+        running;
+    document.getElementById("btn-instructions").disabled =
+        running;
+    document.getElementById("btn-stop").disabled =
+        !running;
 }
 function clearCanvas() {
-  const app = document.getElementById("app");
-  if (app) app.innerHTML = "";
+    const app = document.getElementById("app");
+    if (app)
+        app.innerHTML = "";
+}
+function renderStandby() {
+    const app = document.getElementById("app");
+    if (!app || currentSession)
+        return;
+    const packages = getAvailablePackages(currentProtocol);
+    app.classList.remove("survey-mode");
+    app.classList.remove("setup-mode");
+    app.classList.add("standby-mode");
+    app.innerHTML = `
+    <section class="standby-shell">
+      <h2>Participant Standby</h2>
+      <p><strong>Study ID:</strong> ${currentProtocol.study_id}</p>
+      <p><strong>Protocol Version:</strong> ${currentProtocol.version}</p>
+      <p>Visible package types are shown below for dev/coordinator review. Use Setup to edit the protocol or launch a specific package from this standby screen.</p>
+      <div class="setup-pill-row">
+        ${packages
+        .map((pkg) => `<span class="setup-pill">${pkg.package_name}</span>`)
+        .join("")}
+      </div>
+      <div class="setup-actions" style="margin-top: 16px;">
+        ${packages
+        .map((pkg) => `
+              <button
+                type="button"
+                class="primary"
+                data-package-launch="${pkg.package_id}"
+              >
+                Launch ${pkg.package_name}
+              </button>
+            `)
+        .join("")}
+      </div>
+    </section>
+  `;
+    app
+        .querySelectorAll("[data-package-launch]")
+        .forEach((button) => {
+        button.addEventListener("click", () => {
+            const packageId = button.dataset.packageLaunch;
+            if (!packageId)
+                return;
+            void launchPromptSession(false, packageId);
+        });
+    });
 }
 function resetToIdle() {
-  currentSession = null;
-  setRunning(false);
-  clearCanvas();
+    currentSession = null;
+    setRunning(false);
+    document.getElementById("app")?.classList.remove("survey-mode");
+    document.getElementById("app")?.classList.remove("setup-mode");
+    clearCanvas();
+    renderStandby();
 }
 // ---------------------------------------------------------------------------
 // Session management
 // ---------------------------------------------------------------------------
+function openSetup() {
+    if (currentSession)
+        return;
+    const app = document.getElementById("app");
+    if (!app)
+        return;
+    app.classList.add("setup-mode");
+    mountSetupUI(app, currentProtocol, (protocol) => {
+        currentProtocol = protocol;
+        setStatus(`saved protocol v${protocol.version}`);
+        renderStandby();
+    });
+}
+function applyAssessmentParameters(game, assessmentId, promptId, showInstructions, packageId) {
+    const assessmentConfig = getAssessmentConfigsForPackage(currentProtocol, packageId).find((a) => a.activity_id === assessmentId);
+    game.setParameters({
+        ...(assessmentConfig?.parameters ?? {}),
+        prompt_id: promptId,
+        protocol_version: currentProtocol.version,
+        show_instructions: showInstructions,
+    });
+}
+function createPromptActivities(promptId, showInstructions, packageId) {
+    const activities = getAssessmentConfigsForPackage(currentProtocol, packageId)
+        .slice()
+        .sort((left, right) => (left.order ?? 0) - (right.order ?? 0))
+        .map((config) => {
+        const activity = ASSESSMENT_MAP[config.activity_id]?.();
+        if (!activity || activity instanceof Survey) {
+            throw new Error(`Unsupported prompt activity: ${config.activity_id}`);
+        }
+        applyAssessmentParameters(activity, config.activity_id, promptId, showInstructions, packageId);
+        return activity;
+    });
+    const survey = new Survey();
+    survey.setParameters(buildEmaSurveyJson(getSurveyConfigForPackage(currentProtocol, packageId), {
+        prompt_id: promptId,
+        study_id: currentProtocol.study_id,
+        protocol_version: currentProtocol.version,
+    }));
+    activities.push(survey);
+    return activities;
+}
 async function launchSession(assessmentId, showInstructions) {
-  if (currentSession) return;
-  const promptId = crypto.randomUUID();
-  const assessment = ASSESSMENT_MAP[assessmentId]?.();
-  if (!assessment) {
-    console.error(`[Dev] Unknown assessment: ${assessmentId}`);
-    return;
-  }
-  const assessmentConfig = DEV_PROTOCOL.assessments.find(
-    (a) => a.activity_id === assessmentId,
-  );
-  // setParameters takes raw values and wraps them in { default: v } internally
-  assessment.setParameters({
-    ...(assessmentConfig?.parameters ?? {}),
-    prompt_id: promptId,
-    show_instructions: showInstructions,
-  });
-  currentSession = new Session({
-    activities: [assessment],
-    dataStores: [new LocalDatabase()],
-    rootElementId: "app",
-  });
-  // In browser, Embedding sets autoStartAfterInit=true — session starts
-  // automatically once initialize() finishes. No manual start() call needed.
-  Embedding.initialize(currentSession, { host: "MobileWebView" });
-  setRunning(true);
-  setStatus(`loading ${assessmentId}…`);
-  currentSession.onStart(() => {
-    setStatus(`running — ${assessmentId}`);
-    console.log(`[Dev] Session started | prompt_id=${promptId}`);
-  });
-  // onEnd fires for both normal completion AND quit/cancel.
-  // (Activity cancel → session.end() → SessionEnd event)
-  currentSession.onEnd(() => {
-    console.log("[Dev] Session ended");
-    setStatus("done — pick another assessment");
-    resetToIdle();
-  });
-  try {
-    await currentSession.initialize();
-    console.log(`[Dev] Initialized | ${assessmentId} | prompt_id=${promptId}`);
-  } catch (err) {
-    console.error(`[Dev] Failed to initialize ${assessmentId}:`, err);
-    setStatus(`error: ${err.message ?? String(err)}`);
-    resetToIdle();
-  }
+    if (currentSession)
+        return;
+    const promptId = crypto.randomUUID();
+    document.getElementById("app")?.classList.remove("standby-mode");
+    const assessment = ASSESSMENT_MAP[assessmentId]?.();
+    if (!assessment) {
+        console.error(`[Dev] Unknown assessment: ${assessmentId}`);
+        return;
+    }
+    const isSurvey = assessment instanceof Survey;
+    if (isSurvey) {
+        document.getElementById("app")?.classList.add("survey-mode");
+        assessment.setParameters(buildEmaSurveyJson(getSurveyConfigForPackage(currentProtocol), {
+            prompt_id: promptId,
+            study_id: currentProtocol.study_id,
+            protocol_version: currentProtocol.version,
+        }));
+    }
+    else {
+        applyAssessmentParameters(assessment, assessmentId, promptId, showInstructions, undefined);
+    }
+    const localDb = new LocalDatabase();
+    currentSession = new Session({
+        activities: [assessment],
+        dataStores: [localDb],
+        rootElementId: "app",
+    });
+    currentSession.onActivityData((event) => {
+        const surveyResponses = extractSurveyItemResponses(event);
+        if (surveyResponses.length > 0) {
+            void persistSurveyItemResponses(localDb, surveyResponses);
+        }
+    });
+    // In browser, Embedding sets autoStartAfterInit=true — session starts
+    // automatically once initialize() finishes. No manual start() call needed.
+    Embedding.initialize(currentSession, { host: "MobileWebView" });
+    setRunning(true);
+    setStatus(`loading ${assessmentId}…`);
+    currentSession.onStart(() => {
+        setStatus(`running — ${assessmentId}`);
+        console.log(`[Dev] Session started | prompt_id=${promptId}`);
+    });
+    // onEnd fires for both normal completion AND quit/cancel.
+    // (Activity cancel → session.end() → SessionEnd event)
+    currentSession.onEnd(() => {
+        console.log("[Dev] Session ended");
+        setStatus("done — pick another assessment");
+        resetToIdle();
+    });
+    try {
+        await currentSession.initialize();
+        console.log(`[Dev] Initialized | ${assessmentId} | prompt_id=${promptId}`);
+    }
+    catch (err) {
+        console.error(`[Dev] Failed to initialize ${assessmentId}:`, err);
+        setStatus(`error: ${err.message ?? String(err)}`);
+        resetToIdle();
+    }
+}
+async function launchPromptSession(showInstructions, packageId = getDefaultPackage(currentProtocol)?.package_id) {
+    if (currentSession)
+        return;
+    const promptId = crypto.randomUUID();
+    const localDb = new LocalDatabase();
+    document.getElementById("app")?.classList.remove("standby-mode");
+    try {
+        currentSession = new Session({
+            activities: createPromptActivities(promptId, showInstructions, packageId),
+            dataStores: [localDb],
+            rootElementId: "app",
+        });
+        currentSession.onActivityData((event) => {
+            const surveyResponses = extractSurveyItemResponses(event);
+            if (surveyResponses.length > 0) {
+                void persistSurveyItemResponses(localDb, surveyResponses);
+            }
+        });
+        Embedding.initialize(currentSession, { host: "MobileWebView" });
+        setRunning(true);
+        setStatus(`loading prompt session${packageId ? ` — ${packageId}` : ""}…`);
+        currentSession.onStart(() => {
+            setStatus(`running — ${packageId ?? "default package"} prompt session`);
+            console.log(`[Dev] Prompt session started | prompt_id=${promptId} | package_id=${packageId ?? "default"}`);
+        });
+        currentSession.onEnd(() => {
+            console.log("[Dev] Prompt session ended");
+            setStatus("done — ready for next prompt");
+            resetToIdle();
+        });
+        await currentSession.initialize();
+        console.log(`[Dev] Initialized | full prompt session | prompt_id=${promptId} | package_id=${packageId ?? "default"}`);
+    }
+    catch (err) {
+        console.error("[Dev] Failed to initialize full prompt session:", err);
+        setStatus(`error: ${err.message ?? String(err)}`);
+        resetToIdle();
+    }
 }
 function stopSession() {
-  if (currentSession) currentSession.end();
+    if (currentSession)
+        currentSession.end();
 }
 // ---------------------------------------------------------------------------
 // UI wiring
 // ---------------------------------------------------------------------------
 document.getElementById("btn-start")?.addEventListener("click", () => {
-  const picker = document.getElementById("assessment-picker");
-  launchSession(picker.value, false);
+    const picker = document.getElementById("assessment-picker");
+    launchSession(picker.value, false);
 });
+document.getElementById("btn-start-prompt")?.addEventListener("click", () => {
+    launchPromptSession(false);
+});
+document.getElementById("btn-setup")?.addEventListener("click", openSetup);
 document.getElementById("btn-instructions")?.addEventListener("click", () => {
-  const picker = document.getElementById("assessment-picker");
-  launchSession(picker.value, true);
+    const picker = document.getElementById("assessment-picker");
+    launchSession(picker.value, true);
 });
 document.getElementById("btn-stop")?.addEventListener("click", stopSession);
-setStatus("idle — pick an assessment");
+setStatus("idle — pick an assessment or run a prompt");
+renderStandby();
 console.log("[Dev] EMA prototype ready.");

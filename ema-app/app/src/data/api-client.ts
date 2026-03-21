@@ -5,12 +5,14 @@
 
 import type { PromptLogEntry } from "../../../contracts/prompt-log.schema";
 import type { ContextSnapshot } from "../../../contracts/context-snapshot.schema";
+import type { SurveyItemResponse } from "../../../contracts/survey-response.schema";
 
 export interface SessionUpload {
   session_uuid: string;
   participant_id: string;
   study_id: string;
   prompt_id: string;
+  protocol_version?: number | null;
   activity_id: string;
   activity_version?: string;
   started_at?: string;
@@ -24,6 +26,7 @@ export interface SyncStatus {
   session_uuids: string[];
   prompt_ids: string[];
   snapshot_ids: string[];
+  survey_response_ids: string[];
 }
 
 export class ApiClient {
@@ -74,6 +77,12 @@ export class ApiClient {
     snapshots: ContextSnapshot[],
   ): Promise<{ stored: number }> {
     return this.post("/context-snapshots", { snapshots });
+  }
+
+  async uploadSurveyResponses(
+    responses: SurveyItemResponse[],
+  ): Promise<{ stored: number }> {
+    return this.post("/survey-responses", { responses });
   }
 
   async getSyncStatus(participantId: string): Promise<SyncStatus> {

@@ -1,6 +1,8 @@
 import type { ComplianceTracker } from "./compliance-tracker";
 import type { ScheduledPrompt } from "../../../contracts/study-protocol.schema";
 
+type ExpiryMinutesResolver = number | ((prompt: ScheduledPrompt) => number);
+
 /**
  * Scans pending prompts and marks any that have passed their expiry window.
  * Called by the background runner (background.js) and on app foreground.
@@ -8,9 +10,8 @@ import type { ScheduledPrompt } from "../../../contracts/study-protocol.schema";
 export function checkExpiry(
   prompts: ScheduledPrompt[],
   tracker: ComplianceTracker,
-  expiryMinutes: number,
+  expiryMinutes: ExpiryMinutesResolver,
 ): { expired: string[]; missed: string[] } {
-  const expiryMs = expiryMinutes * 60_000;
   const nowMs = Date.now();
   const expired: string[] = [];
   const missed: string[] = [];
@@ -19,6 +20,10 @@ export function checkExpiry(
     const entry = tracker.get(prompt.prompt_id);
     if (!entry) continue;
 
+    const expiryMs =
+      (typeof expiryMinutes === "function"
+        ? expiryMinutes(prompt)
+        : expiryMinutes) * 60_000;
     const scheduledMs = new Date(prompt.scheduled_for).getTime();
 
     if (entry.status === "sent" && entry.sent_at) {

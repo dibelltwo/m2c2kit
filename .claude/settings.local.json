@@ -21,7 +21,10 @@
       "Bash(npm run:*)",
       "Bash(pkill -f \"rollup\\\\|livereload\\\\|concurrently.*ema\")",
       "Bash(curl -s -o /dev/null -w \"%{http_code}\" http://localhost:3000)",
-      "Read(//private/tmp/**)"
+      "Read(//private/tmp/**)",
+      "Bash(source \"$NVM_DIR/nvm.sh\")",
+      "Bash(lsof -ti:3000)",
+      "Bash(xargs kill:*)"
     ]
   }
 }

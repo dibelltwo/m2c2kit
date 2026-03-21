@@ -3,7 +3,7 @@
   "version": "0.1.0",
   "private": true,
   "scripts": {
-    "serve": "concurrently \"rollup -c --watch --configServe\" \"tsc --watch\" --names rollup,typescript --prefix-colors auto,red",
+    "serve": "mkdir -p build && cp src/index.html build/index.html && concurrently \"rollup -c --watch --configServe --configPort 3001\" \"tsc --watch\" --names rollup,typescript --prefix-colors auto,red",
     "build": "npm run clean && tsc && rollup -c --configProd",
     "clean": "rimraf build dist .rollup.cache",
     "cap:sync": "npx cap sync",
@@ -20,7 +20,8 @@
     "@m2c2kit/assessment-symbol-search": "0.8.34",
     "@m2c2kit/db": "0.3.30",
     "@m2c2kit/embedding": "1.0.29",
-    "@m2c2kit/session": "0.3.18"
+    "@m2c2kit/session": "0.3.18",
+    "@m2c2kit/survey": "0.3.31"
   },
   "devDependencies": {
     "@m2c2kit/build-helpers": "0.3.32",

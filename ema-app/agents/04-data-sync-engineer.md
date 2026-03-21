@@ -1,9 +1,11 @@
 # Agent 04 — Data & Sync Engineer
 
 ## Role
+
 Own on-device data persistence (extending `@m2c2kit/db`) and the sync layer that uploads collected data to the backend. You define the on-device table structures, implement the sync queue with offline-first retry logic, and handle data deduplication.
 
 ## Owns
+
 ```
 ema-app/app/src/data/
   ema-database.ts         ← extended LocalDatabase with EMA tables
@@ -20,11 +22,11 @@ ema-app/app/src/data/
 import Dexie from "dexie";
 
 export class EmaDatabase extends Dexie {
-  activityResults!: Dexie.Table<ActivityResultsRow, string>;  // from @m2c2kit/db
-  keyValueStore!: Dexie.Table<KeyValueRow, string>;           // from @m2c2kit/db
-  promptLog!: Dexie.Table<PromptLogEntry, string>;            // EMA-specific
-  contextSnapshots!: Dexie.Table<ContextSnapshot, string>;    // EMA-specific
-  syncQueue!: Dexie.Table<SyncQueueItem, number>;             // upload queue
+  activityResults!: Dexie.Table<ActivityResultsRow, string>; // from @m2c2kit/db
+  keyValueStore!: Dexie.Table<KeyValueRow, string>; // from @m2c2kit/db
+  promptLog!: Dexie.Table<PromptLogEntry, string>; // EMA-specific
+  contextSnapshots!: Dexie.Table<ContextSnapshot, string>; // EMA-specific
+  syncQueue!: Dexie.Table<SyncQueueItem, number>; // upload queue
 
   constructor() {
     super("EmaDatabase");
@@ -47,7 +49,7 @@ All data goes through the sync queue — never uploaded synchronously:
 interface SyncQueueItem {
   id?: number;
   table_name: "activityResults" | "promptLog" | "contextSnapshots";
-  record_id: string;          // PK of the source record
+  record_id: string; // PK of the source record
   status: "pending" | "uploading" | "done" | "failed";
   attempt_count: number;
   last_attempted_at: string | null;
@@ -62,7 +64,7 @@ interface SyncQueueItem {
 async function saveAndEnqueue<T extends { [key: string]: any }>(
   table: Dexie.Table<T, string>,
   record: T,
-  pk: string
+  pk: string,
 ) {
   await db.transaction("rw", [table, db.syncQueue], async () => {
     await table.put(record);
@@ -87,7 +89,10 @@ import { Network } from "@capacitor/network";
 export class SyncManager {
   private syncing = false;
 
-  constructor(private db: EmaDatabase, private api: ApiClient) {
+  constructor(
+    private db: EmaDatabase,
+    private api: ApiClient,
+  ) {
     // Sync when network returns
     Network.addListener("networkStatusChange", (status) => {
       if (status.connected) this.sync();
@@ -98,18 +103,63 @@ export class SyncManager {
     if (this.syncing) return;
     this.syncing = true;
     try {
+      await this.checkProtocolUpdate(); // pull before push
       await this.syncTable("promptLog", "prompt_id", this.api.uploadPromptLog);
-      await this.syncTable("contextSnapshots", "snapshot_id", this.api.uploadContextSnapshots);
-      await this.syncTable("activityResults", "document_uuid", this.api.uploadAssessmentResults);
+      await this.syncTable(
+        "contextSnapshots",
+        "snapshot_id",
+        this.api.uploadContextSnapshots,
+      );
+      await this.syncTable(
+        "activityResults",
+        "document_uuid",
+        this.api.uploadAssessmentResults,
+      );
     } finally {
       this.syncing = false;
+    }
+  }
+
+  /**
+   * Checks the server for a newer protocol version.
+   * If found, overwrites local protocol and emits PROTOCOL_UPDATED
+   * so the Scheduler can cancel + regenerate notifications.
+   */
+  async checkProtocolUpdate() {
+    const stored = await Preferences.get({ key: "study_protocol" });
+    if (!stored.value) return;
+    const local: StudyProtocol = JSON.parse(stored.value);
+
+    const participantId = await Preferences.get({ key: "participant_id" });
+    if (!participantId.value) return;
+
+    try {
+      const res = await this.api.fetchProtocol(
+        participantId.value,
+        local.version, // server returns 304 if unchanged
+      );
+      if (res.status === 304) return; // no change
+
+      const newProtocol: StudyProtocol = await res.json();
+      if (newProtocol.version <= local.version) return;
+
+      // Overwrite local copy
+      await Preferences.set({
+        key: "study_protocol",
+        value: JSON.stringify(newProtocol),
+      });
+
+      // Notify Scheduler via bridge
+      sendToNative({ type: "PROTOCOL_UPDATED", protocol: newProtocol });
+    } catch {
+      // Network error — silent fail, will retry on next sync cycle
     }
   }
 
   private async syncTable(
     tableName: string,
     pk: string,
-    uploadFn: (rows: unknown[]) => Promise<{ uploaded_ids: string[] }>
+    uploadFn: (rows: unknown[]) => Promise<{ uploaded_ids: string[] }>,
   ) {
     const pending = await this.db.syncQueue
       .where({ table_name: tableName, status: "pending" })
@@ -124,14 +174,19 @@ export class SyncManager {
       const rows = await table.where(pk).anyOf(ids).toArray();
 
       try {
-        await this.db.syncQueue.where("id").anyOf(batch.map((b) => b.id!))
+        await this.db.syncQueue
+          .where("id")
+          .anyOf(batch.map((b) => b.id!))
           .modify({ status: "uploading" });
         const result = await uploadFn(rows);
         await this.db.syncQueue
-          .where("record_id").anyOf(result.uploaded_ids)
+          .where("record_id")
+          .anyOf(result.uploaded_ids)
           .modify({ status: "done" });
       } catch (err) {
-        await this.db.syncQueue.where("id").anyOf(batch.map((b) => b.id!))
+        await this.db.syncQueue
+          .where("id")
+          .anyOf(batch.map((b) => b.id!))
           .modify((item) => {
             item.status = "failed";
             item.attempt_count += 1;
@@ -164,6 +219,7 @@ async uploadAssessmentResults(rows: ActivityResultsRow[]) {
 ## Data Volumes (EMA estimate)
 
 Per participant per day:
+
 - **Prompts:** 5 rows/day × 14 days = 70 prompt log rows
 - **Snapshots:** 5 rows/day × 14 days = 70 context snapshot rows
 - **Assessment trials:** 5 prompts × 4 assessments × ~10 trials = 200 trial rows/day
@@ -173,22 +229,39 @@ Total per 14-day study: ~4,000 rows — well within IndexedDB limits.
 
 ## Sync Triggers
 
-| Trigger | Action |
-|---------|--------|
-| Network becomes available | Full sync |
-| After each assessment session ends | Sync (opportunistic) |
-| App foregrounds | Sync if last sync > 1 hour ago |
-| Manual (settings screen) | Full sync |
-| Background runner (every 15 min) | Lightweight sync if network available |
+| Trigger                            | Action                                                 |
+| ---------------------------------- | ------------------------------------------------------ |
+| Network becomes available          | Full sync (including protocol check)                   |
+| After each assessment session ends | Sync (opportunistic)                                   |
+| App foregrounds                    | Sync if last sync > 1 hour ago                         |
+| Manual (settings screen)           | Full sync                                              |
+| Background runner (every 15 min)   | Lightweight sync + protocol check if network available |
+
+## Protocol Pull Flow
+
+```
+Each sync cycle:
+  GET /participants/:id/protocol?current_version=N
+    → 304: no change, continue
+    → 200: new protocol received
+        → overwrite Capacitor Preferences
+        → emit PROTOCOL_UPDATED to Scheduler via bridge
+        → Scheduler cancels + regenerates notifications
+```
+
+Protocol check always runs **before** data upload so the Scheduler can begin rescheduling while data is uploading.
 
 ## Integration Points
 
 - **Reads contracts from:** Protocol Architect (`prompt-log.schema`, `context-snapshot.schema`, `api.openapi.yaml`)
 - **Receives data from:** Assessment Engineer (via `m2c2kit/db` activityResults), Scheduler (promptLog rows), Native Platform (contextSnapshots)
 - **Sends to:** Backend Engineer (via `ApiClient` implementing the OpenAPI contract)
+- **Sends to:** Scheduler — `PROTOCOL_UPDATED` bridge event when server returns a new protocol version
 
 ## Does NOT
+
 - Write backend API implementation code
-- Write notification scheduling logic
+- Write notification scheduling logic (that's Scheduler)
 - Modify m2c2kit assessment code
 - Design the UI
+- Apply the protocol update — only detects and forwards it

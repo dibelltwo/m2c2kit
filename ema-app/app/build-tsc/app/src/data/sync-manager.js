@@ -32,6 +32,7 @@ export class SyncManager {
     try {
       await this.syncPromptLogs();
       await this.syncContextSnapshots();
+      await this.syncSurveyResponses();
       // activityResults sync handled separately (needs session assembly)
       this.lastSyncAt = Date.now();
       console.log("[Sync] Sync complete");
@@ -73,6 +74,21 @@ export class SyncManager {
         .toArray();
       await this.uploadBatch(batch, async () => {
         const result = await this.api.uploadContextSnapshots(rows);
+        return ids.slice(0, result.stored);
+      });
+    }
+  }
+  async syncSurveyResponses() {
+    const pending = await this.db.getPendingSync("surveyResponses");
+    if (pending.length === 0) return;
+    for (const batch of chunk(pending, BATCH_SIZE)) {
+      const ids = batch.map((q) => q.record_id);
+      const rows = await this.db.surveyResponses
+        .where("record_id")
+        .anyOf(ids)
+        .toArray();
+      await this.uploadBatch(batch, async () => {
+        const result = await this.api.uploadSurveyResponses(rows);
         return ids.slice(0, result.stored);
       });
     }

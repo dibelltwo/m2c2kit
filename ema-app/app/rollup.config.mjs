@@ -1,7 +1,6 @@
 import esbuild from "rollup-plugin-esbuild";
 import nodeResolve from "@rollup/plugin-node-resolve";
 import serve from "rollup-plugin-serve";
-import livereload from "rollup-plugin-livereload";
 import { copyAssets } from "@m2c2kit/build-helpers";
 
 export default (commandLineArgs) => {
@@ -31,6 +30,7 @@ export default (commandLineArgs) => {
             "@m2c2kit/assessment-symbol-search",
             "@m2c2kit/db",
             "@m2c2kit/session",
+            "@m2c2kit/survey",
           ],
           outputFolder,
         }),
@@ -42,7 +42,6 @@ export default (commandLineArgs) => {
             host: "localhost",
             port,
           }),
-        isServe && livereload({ watch: outputFolder, delay: 250 }),
       ],
     },
   ];

@@ -19,6 +19,10 @@ components:
       type: http
       scheme: bearer
       bearerFormat: JWT
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
 
   schemas:
     Participant:
@@ -43,6 +47,7 @@ components:
           version,
           schedule,
           assessments,
+          ema_survey,
           context_collection,
         ]
       properties:
@@ -59,6 +64,8 @@ components:
           type: array
           items:
             type: object
+        ema_survey:
+          type: object
         context_collection:
           type: object
 
@@ -84,6 +91,9 @@ components:
           type: string
         prompt_id:
           type: string
+        protocol_version:
+          type: integer
+          nullable: true
         activity_id:
           type: string
         activity_version:
@@ -118,6 +128,9 @@ components:
           type: string
         study_id:
           type: string
+        protocol_version:
+          type: integer
+          nullable: true
         status:
           type: string
           enum:
@@ -170,6 +183,9 @@ components:
           type: string
         participant_id:
           type: string
+        protocol_version:
+          type: integer
+          nullable: true
         captured_at:
           type: string
           format: date-time
@@ -195,9 +211,51 @@ components:
           enum: [wifi, cellular, none]
           nullable: true
 
+    SurveyItemResponse:
+      type: object
+      required:
+        [
+          record_id,
+          session_uuid,
+          survey_id,
+          item_id,
+          response_status,
+          captured_at,
+        ]
+      properties:
+        record_id:
+          type: string
+        session_uuid:
+          type: string
+          format: uuid
+        prompt_id:
+          type: string
+          nullable: true
+        study_id:
+          type: string
+          nullable: true
+        protocol_version:
+          type: integer
+          nullable: true
+        survey_id:
+          type: string
+        survey_version:
+          type: integer
+          nullable: true
+        item_id:
+          type: string
+        response_status:
+          type: string
+          enum: [answered, skipped]
+        response_value:
+          nullable: true
+        captured_at:
+          type: string
+          format: date-time
+
     SyncStatus:
       type: object
-      required: [session_uuids, prompt_ids, snapshot_ids]
+      required: [session_uuids, prompt_ids, snapshot_ids, survey_response_ids]
       properties:
         session_uuids:
           type: array
@@ -214,6 +272,11 @@ components:
           items:
             type: string
           description: snapshot_ids already received.
+        survey_response_ids:
+          type: array
+          items:
+            type: string
+          description: normalized survey response record_ids already received.
 
     Error:
       type: object
@@ -402,6 +465,39 @@ paths:
               schema:
                 $ref: "#/components/schemas/Error"
 
+  /survey-responses:
+    post:
+      summary: Upload normalized survey item responses (batch)
+      description: Accepts an array. Idempotent on record_id.
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [responses]
+              properties:
+                responses:
+                  type: array
+                  items:
+                    $ref: "#/components/schemas/SurveyItemResponse"
+      responses:
+        "200":
+          description: Survey responses stored.
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  stored:
+                    type: integer
+        "400":
+          description: Invalid payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
   /participants/{participant_id}/sync-status:
     get:
       summary: Check what data the server has already received
@@ -428,6 +524,120 @@ paths:
                 $ref: "#/components/schemas/SyncStatus"
         "404":
           description: Participant not found.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /studies/{study_id}/protocol:
+    put:
+      summary: Update the active study protocol
+      description: Researcher endpoint. Replaces the active protocol snapshot when the version is newer.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: study_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/StudyProtocol"
+      responses:
+        "200":
+          description: Protocol updated.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [version]
+                properties:
+                  version:
+                    type: integer
+        "400":
+          description: Invalid protocol version or payload.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /studies/{study_id}/export:
+    post:
+      summary: Start an async export job
+      description: Researcher endpoint. Produces a longitudinal export from all protocol versions and uploaded data.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: study_id
+          required: true
+          schema:
+            type: string
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required: [format]
+              properties:
+                format:
+                  type: string
+                  enum: [csv, json]
+      responses:
+        "202":
+          description: Export job created.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [job_id]
+                properties:
+                  job_id:
+                    type: string
+        "400":
+          description: Invalid request.
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/Error"
+
+  /export-jobs/{job_id}:
+    get:
+      summary: Poll an export job
+      description: Researcher endpoint. Returns job state and a download URL when ready.
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - in: path
+          name: job_id
+          required: true
+          schema:
+            type: string
+      responses:
+        "200":
+          description: Export job state.
+          content:
+            application/json:
+              schema:
+                type: object
+                required: [status]
+                properties:
+                  status:
+                    type: string
+                    enum: [pending, running, ready, failed]
+                  download_url:
+                    type: string
+                    nullable: true
+                  error:
+                    type: string
+                    nullable: true
+        "404":
+          description: Export job not found.
           content:
             application/json:
               schema:

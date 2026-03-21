@@ -1,0 +1,23 @@
+{
+  "name": "@m2c2kit/ema-server",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "prisma:generate": "prisma generate",
+    "prisma:migrate": "prisma migrate dev",
+    "build": "tsc -p tsconfig.json",
+    "dev": "node --watch dist/index.js",
+    "start": "node dist/index.js",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "@prisma/client": "6.7.0"
+  },
+  "devDependencies": {
+    "prisma": "6.7.0"
+  },
+  "engines": {
+    "node": ">=22"
+  }
+}

@@ -1,0 +1,313 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>M2C2 EMA Setup</title>
+    <style>
+      :root {
+        --bg: #f4f0e8;
+        --panel: #fffaf0;
+        --ink: #1f2a1f;
+        --muted: #657061;
+        --line: #d8cfbf;
+        --accent: #1e6b52;
+        --accent-strong: #14503d;
+        --warn: #9c4a22;
+      }
+
+      * {
+        box-sizing: border-box;
+      }
+
+      body {
+        margin: 0;
+        font-family: Georgia, "Times New Roman", serif;
+        background:
+          radial-gradient(
+            circle at top left,
+            rgba(30, 107, 82, 0.08),
+            transparent 35%
+          ),
+          linear-gradient(180deg, #f8f4ec 0%, var(--bg) 100%);
+        color: var(--ink);
+      }
+
+      main {
+        max-width: 1100px;
+        margin: 0 auto;
+        padding: 28px 16px 64px;
+      }
+
+      h1,
+      h2 {
+        margin: 0 0 12px;
+        font-weight: 600;
+      }
+
+      p {
+        margin: 0 0 12px;
+        color: var(--muted);
+        line-height: 1.45;
+      }
+
+      .hero {
+        margin-bottom: 24px;
+      }
+
+      .grid {
+        display: grid;
+        grid-template-columns: 1.15fr 0.85fr;
+        gap: 18px;
+      }
+
+      .panel {
+        background: var(--panel);
+        border: 1px solid var(--line);
+        border-radius: 18px;
+        padding: 18px;
+        box-shadow: 0 12px 36px rgba(31, 42, 31, 0.06);
+      }
+
+      .stack {
+        display: grid;
+        gap: 14px;
+      }
+
+      .field {
+        display: grid;
+        gap: 6px;
+      }
+
+      label {
+        font-size: 14px;
+        font-weight: 600;
+      }
+
+      input,
+      select,
+      textarea,
+      button {
+        font: inherit;
+      }
+
+      input,
+      select,
+      textarea {
+        width: 100%;
+        padding: 10px 12px;
+        border-radius: 10px;
+        border: 1px solid var(--line);
+        background: #fff;
+        color: var(--ink);
+      }
+
+      textarea {
+        min-height: 110px;
+        resize: vertical;
+      }
+
+      button {
+        border: 0;
+        border-radius: 999px;
+        padding: 10px 16px;
+        background: var(--accent);
+        color: #fff;
+        cursor: pointer;
+      }
+
+      button.secondary {
+        background: #dfe8e2;
+        color: var(--ink);
+      }
+
+      button:hover {
+        background: var(--accent-strong);
+      }
+
+      button.secondary:hover {
+        background: #d1ddd5;
+      }
+
+      .row {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .pill {
+        display: inline-flex;
+        align-items: center;
+        gap: 8px;
+        border-radius: 999px;
+        border: 1px solid var(--line);
+        background: #fff;
+        padding: 8px 12px;
+        font-size: 13px;
+      }
+
+      .item-card {
+        border: 1px solid var(--line);
+        border-radius: 14px;
+        padding: 14px;
+        background: #fff;
+      }
+
+      .item-card h3 {
+        margin: 0 0 8px;
+        font-size: 16px;
+      }
+
+      .actions {
+        display: flex;
+        gap: 10px;
+        flex-wrap: wrap;
+      }
+
+      .warning {
+        color: var(--warn);
+        font-size: 13px;
+      }
+
+      pre {
+        overflow: auto;
+        margin: 0;
+        padding: 14px;
+        border-radius: 12px;
+        background: #17211b;
+        color: #eaf4ed;
+        font-size: 12px;
+        line-height: 1.5;
+      }
+
+      @media (max-width: 900px) {
+        .grid {
+          grid-template-columns: 1fr;
+        }
+      }
+    </style>
+  </head>
+  <body>
+    <main>
+      <section class="hero">
+        <h1>EMA Study Setup</h1>
+        <p>
+          Configure the fixed 4-test cognitive battery, define the EMA survey,
+          and preview the `random_block` schedule before enrollment.
+        </p>
+      </section>
+
+      <div class="grid">
+        <section class="panel stack">
+          <div>
+            <h2>Study Core</h2>
+            <p>
+              The participant battery is fixed. The researcher can edit only
+              survey and scheduling details here.
+            </p>
+          </div>
+
+          <div class="row">
+            <div class="pill">Color Dots</div>
+            <div class="pill">Color Shapes</div>
+            <div class="pill">Grid Memory</div>
+            <div class="pill">Symbol Search</div>
+          </div>
+
+          <div class="field">
+            <label for="study-id">Study ID</label>
+            <input id="study-id" value="ema-study" />
+          </div>
+
+          <div class="field">
+            <label for="survey-title">Survey Title</label>
+            <input id="survey-title" value="EMA Check-in" />
+          </div>
+
+          <div class="field">
+            <label for="survey-instruction">Survey Instruction</label>
+            <textarea id="survey-instruction">
+Please answer or skip each question before submitting the survey.</textarea
+            >
+          </div>
+
+          <div class="field">
+            <label for="warning-text">Unanswered Warning</label>
+            <input
+              id="warning-text"
+              value="Please answer or skip all questions before submitting the survey."
+            />
+          </div>
+
+          <div class="panel stack">
+            <div>
+              <h2>Survey Items</h2>
+              <p>
+                Add EMA items with stable item IDs. New items should receive new
+                IDs and a higher survey version.
+              </p>
+            </div>
+
+            <div id="survey-items" class="stack"></div>
+
+            <div class="actions">
+              <button id="add-slider">Add Slider Item</button>
+              <button id="add-text" class="secondary">Add Text Item</button>
+            </div>
+          </div>
+
+          <div class="panel stack">
+            <div>
+              <h2>Random Block Schedule</h2>
+              <p>
+                Prompts are delivered randomly within researcher-defined time
+                blocks.
+              </p>
+            </div>
+
+            <div class="field">
+              <label for="prompts-per-day">Prompts Per Day</label>
+              <input id="prompts-per-day" type="number" min="1" value="4" />
+            </div>
+
+            <div class="field">
+              <label for="min-gap">Minimum Gap Minutes</label>
+              <input id="min-gap" type="number" min="1" value="60" />
+            </div>
+
+            <div class="field">
+              <label for="expiry">Expiry Minutes</label>
+              <input id="expiry" type="number" min="1" value="30" />
+            </div>
+
+            <div class="field">
+              <label for="days-total">Study Duration Days</label>
+              <input id="days-total" type="number" min="1" value="14" />
+            </div>
+
+            <div id="time-blocks" class="stack"></div>
+
+            <div class="actions">
+              <button id="add-block">Add Time Block</button>
+            </div>
+          </div>
+        </section>
+
+        <aside class="panel stack">
+          <div>
+            <h2>Protocol Preview</h2>
+            <p>
+              This preview is intended for coordinator review before enrollment
+              or protocol update.
+            </p>
+          </div>
+
+          <div class="warning" id="preview-warning"></div>
+          <pre id="protocol-preview"></pre>
+        </aside>
+      </div>
+    </main>
+
+    <script type="module" src="./setup.ts"></script>
+  </body>
+</html>
