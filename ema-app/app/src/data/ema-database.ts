@@ -116,4 +116,21 @@ export class EmaDatabase extends Dexie {
       .where({ table_name: tableName, status: "pending" })
       .toArray();
   }
+
+  async getRetryableSync(
+    tableName: SyncQueueItem["table_name"],
+  ): Promise<SyncQueueItem[]> {
+    const [pending, failed] = await Promise.all([
+      this.syncQueue
+        .where({ table_name: tableName, status: "pending" })
+        .toArray(),
+      this.syncQueue
+        .where({ table_name: tableName, status: "failed" })
+        .toArray(),
+    ]);
+
+    return [...pending, ...failed].sort((a, b) =>
+      a.created_at.localeCompare(b.created_at),
+    );
+  }
 }

@@ -35,7 +35,9 @@ Core model:
 - backend server scaffold exists in:
   - `ema-app/server/`
   - uploads and prototype state persist to `ema-app/server/data/state.json`
-  - an optional Prisma/Postgres slice now exists for studies, protocol versions, participants, and export jobs
+  - an optional Prisma/Postgres slice now exists for the current backend surface, with checked-in Prisma migration files and import path from `state.json`
+  - researcher exports now produce a real JSON/CSV download route instead of only a placeholder ready state
+  - DB-backed mode has now been validated locally against migrated/imported PGlite-backed data
 - start/end date fields in setup flow
 - dev prototype can run:
   - single assessments

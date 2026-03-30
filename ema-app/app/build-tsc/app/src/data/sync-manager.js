@@ -12,9 +12,10 @@ function chunk(arr, size) {
  * Triggered by: network recovery, session end, app foreground, background runner.
  */
 export class SyncManager {
-  constructor(db, api) {
+  constructor(db, api, participantId) {
     this.db = db;
     this.api = api;
+    this.participantId = participantId;
     this.syncing = false;
     this.lastSyncAt = 0;
     // Auto-sync when network becomes available
@@ -49,8 +50,9 @@ export class SyncManager {
     }
   }
   async syncPromptLogs() {
-    const pending = await this.db.getPendingSync("promptLog");
+    const pending = await this.db.getRetryableSync("promptLog");
     if (pending.length === 0) return;
+    await this.markAlreadySynced("promptLog");
     for (const batch of chunk(pending, BATCH_SIZE)) {
       const ids = batch.map((q) => q.record_id);
       const rows = await this.db.promptLog
@@ -64,8 +66,9 @@ export class SyncManager {
     }
   }
   async syncContextSnapshots() {
-    const pending = await this.db.getPendingSync("contextSnapshots");
+    const pending = await this.db.getRetryableSync("contextSnapshots");
     if (pending.length === 0) return;
+    await this.markAlreadySynced("contextSnapshots");
     for (const batch of chunk(pending, BATCH_SIZE)) {
       const ids = batch.map((q) => q.record_id);
       const rows = await this.db.contextSnapshots
@@ -79,8 +82,9 @@ export class SyncManager {
     }
   }
   async syncSurveyResponses() {
-    const pending = await this.db.getPendingSync("surveyResponses");
+    const pending = await this.db.getRetryableSync("surveyResponses");
     if (pending.length === 0) return;
+    await this.markAlreadySynced("surveyResponses");
     for (const batch of chunk(pending, BATCH_SIZE)) {
       const ids = batch.map((q) => q.record_id);
       const rows = await this.db.surveyResponses
@@ -123,5 +127,26 @@ export class SyncManager {
           }
         });
     }
+  }
+  async markAlreadySynced(tableName) {
+    const syncStatus = await this.api.getSyncStatus(this.participantId);
+    const syncedIds =
+      tableName === "promptLog"
+        ? syncStatus.prompt_ids
+        : tableName === "contextSnapshots"
+          ? syncStatus.snapshot_ids
+          : syncStatus.survey_response_ids;
+    if (syncedIds.length === 0) {
+      return;
+    }
+    await this.db.syncQueue
+      .where("record_id")
+      .anyOf(syncedIds)
+      .modify((item) => {
+        if (item.table_name === tableName) {
+          item.status = "done";
+          item.error = null;
+        }
+      });
   }
 }

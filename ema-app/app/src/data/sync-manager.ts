@@ -26,6 +26,7 @@ export class SyncManager {
   constructor(
     private db: EmaDatabase,
     private api: ApiClient,
+    private participantId: string,
   ) {
     // Auto-sync when network becomes available
     Network.addListener("networkStatusChange", (status: ConnectionStatus) => {
@@ -62,8 +63,10 @@ export class SyncManager {
   }
 
   private async syncPromptLogs(): Promise<void> {
-    const pending = await this.db.getPendingSync("promptLog");
+    const pending = await this.db.getRetryableSync("promptLog");
     if (pending.length === 0) return;
+
+    await this.markAlreadySynced("promptLog");
 
     for (const batch of chunk(pending, BATCH_SIZE)) {
       const ids = batch.map((q) => q.record_id);
@@ -82,8 +85,10 @@ export class SyncManager {
   }
 
   private async syncContextSnapshots(): Promise<void> {
-    const pending = await this.db.getPendingSync("contextSnapshots");
+    const pending = await this.db.getRetryableSync("contextSnapshots");
     if (pending.length === 0) return;
+
+    await this.markAlreadySynced("contextSnapshots");
 
     for (const batch of chunk(pending, BATCH_SIZE)) {
       const ids = batch.map((q) => q.record_id);
@@ -102,8 +107,10 @@ export class SyncManager {
   }
 
   private async syncSurveyResponses(): Promise<void> {
-    const pending = await this.db.getPendingSync("surveyResponses");
+    const pending = await this.db.getRetryableSync("surveyResponses");
     if (pending.length === 0) return;
+
+    await this.markAlreadySynced("surveyResponses");
 
     for (const batch of chunk(pending, BATCH_SIZE)) {
       const ids = batch.map((q) => q.record_id);
@@ -157,5 +164,31 @@ export class SyncManager {
           }
         });
     }
+  }
+
+  private async markAlreadySynced(
+    tableName: "promptLog" | "contextSnapshots" | "surveyResponses",
+  ): Promise<void> {
+    const syncStatus = await this.api.getSyncStatus(this.participantId);
+    const syncedIds =
+      tableName === "promptLog"
+        ? syncStatus.prompt_ids
+        : tableName === "contextSnapshots"
+          ? syncStatus.snapshot_ids
+          : syncStatus.survey_response_ids;
+
+    if (syncedIds.length === 0) {
+      return;
+    }
+
+    await this.db.syncQueue
+      .where("record_id")
+      .anyOf(syncedIds)
+      .modify((item) => {
+        if (item.table_name === tableName) {
+          item.status = "done";
+          item.error = null;
+        }
+      });
   }
 }

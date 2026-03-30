@@ -1,3 +1,4 @@
+import "./env.js";
 import { createHmac, randomUUID, timingSafeEqual } from "node:crypto";
 import {
   createServer,
@@ -9,21 +10,27 @@ import {
   createExportJobRecord,
   createParticipantRecord,
   getComplianceRecord,
+  getBackendCounts,
   getExportJobRecord,
   getLastSyncAtRecord,
   getParticipantRecord,
+  getStudyExportDataset,
+  getStudySummaryRecord,
   getStoredProtocolRecord,
   getSyncStatusRecordIds,
   isDatabaseEnabled,
+  listStudyProtocolVersions,
   listParticipantRecords,
   saveStoredProtocolRecord,
   type ContextSnapshot,
   type ExportJob,
   type ParticipantRecord,
   type PromptLogEntry,
+  type ProtocolVersionSummary,
   type SessionUpload,
   type StoredProtocol,
   type StudyProtocol,
+  type StudySummary,
   type SurveyResponse,
   upsertContextSnapshotRecords,
   upsertPromptLogRecords,
@@ -64,6 +71,43 @@ const JWT_SECRET = process.env.JWT_SECRET ?? "ema-server-dev-secret";
 const API_KEY = process.env.EMA_API_KEY ?? "ema-dev-api-key";
 const PORT = Number(process.env.PORT ?? 3000);
 const API_PREFIX = "/v1";
+const CORS_HEADERS = {
+  "Access-Control-Allow-Origin": "*",
+  "Access-Control-Allow-Headers": "Content-Type, Authorization, X-Api-Key",
+  "Access-Control-Allow-Methods": "GET, POST, PUT, OPTIONS",
+};
+
+type ExportDataset = {
+  study_id: string;
+  exported_at: string;
+  protocol_versions: StoredProtocol[];
+  participants: Array<Omit<ParticipantRecord, "token">>;
+  sessions: SessionUpload[];
+  prompt_logs: PromptLogEntry[];
+  context_snapshots: ContextSnapshot[];
+  survey_responses: SurveyResponse[];
+};
+
+type HealthPayload = {
+  ok: boolean;
+  service: string;
+  timestamp: string;
+  storage_mode: "database" | "file";
+  counts: {
+    participants: number;
+    protocol_versions: number;
+    sessions: number;
+    prompt_logs: number;
+    context_snapshots: number;
+    survey_responses: number;
+    export_jobs: number;
+  };
+};
+
+type StudySummaryResponse = StudySummary & {
+  latest_export_download_url: string | null;
+  latest_protocol_version: number | null;
+};
 
 function snapshotState() {
   return {
@@ -75,6 +119,108 @@ function snapshotState() {
     sessions: [...sessions.values()],
     exportJobs: DATABASE_ENABLED ? [] : [...exportJobs.values()],
   };
+}
+
+async function buildFileStudySummary(
+  studyId: string,
+): Promise<StudySummaryResponse | null> {
+  const protocol = await getStudyProtocol(studyId);
+  const studyParticipants = [...participants.values()].filter(
+    (participant) => participant.study_id === studyId,
+  );
+  const studySessions = [...sessions.values()].filter(
+    (session) => session.study_id === studyId,
+  );
+  const studyPromptLogs = [...promptLogs.values()].filter(
+    (entry) =>
+      entry.study_id === studyId ||
+      (typeof entry.participant_id === "string" &&
+        studyParticipants.some(
+          (participant) => participant.participant_id === entry.participant_id,
+        )),
+  );
+  const studySnapshots = [...contextSnapshots.values()].filter(
+    (snapshot) =>
+      snapshot.study_id === studyId ||
+      (typeof snapshot.participant_id === "string" &&
+        studyParticipants.some(
+          (participant) =>
+            participant.participant_id === snapshot.participant_id,
+        )),
+  );
+  const studySurveyResponses = [...surveyResponses.values()].filter(
+    (row) =>
+      row.study_id === studyId ||
+      (typeof row.participant_id === "string" &&
+        studyParticipants.some(
+          (participant) => participant.participant_id === row.participant_id,
+        )),
+  );
+  const studyExportJobs = [...exportJobs.values()].filter(
+    (job) => job.study_id === studyId,
+  );
+
+  if (
+    !protocol &&
+    studyParticipants.length === 0 &&
+    studySessions.length === 0 &&
+    studyPromptLogs.length === 0 &&
+    studySnapshots.length === 0 &&
+    studySurveyResponses.length === 0 &&
+    studyExportJobs.length === 0
+  ) {
+    return null;
+  }
+
+  const latestProtocol = protocol?.updated_at ?? null;
+  const latestSession =
+    studySessions
+      .map((session) => session.ended_at ?? session.started_at ?? null)
+      .filter((value): value is string => typeof value === "string")
+      .sort()
+      .at(-1) ?? null;
+  const latestExport =
+    studyExportJobs
+      .sort((a, b) => a.updated_at.localeCompare(b.updated_at))
+      .at(-1) ?? null;
+
+  return {
+    study_id: studyId,
+    participant_count: studyParticipants.length,
+    session_count: studySessions.length,
+    prompt_log_count: studyPromptLogs.length,
+    survey_response_count: studySurveyResponses.length,
+    context_snapshot_count: studySnapshots.length,
+    protocol_version_count: protocol ? 1 : 0,
+    export_job_count: studyExportJobs.length,
+    latest_protocol_updated_at: latestProtocol,
+    latest_session_at: latestSession,
+    latest_export_status: latestExport?.status ?? null,
+    latest_export_job_id: latestExport?.job_id ?? null,
+    latest_export_download_url: latestExport?.download_url ?? null,
+    latest_protocol_version: protocol?.version ?? null,
+  };
+}
+
+async function getStudySummary(
+  studyId: string,
+): Promise<StudySummaryResponse | null> {
+  if (DATABASE_ENABLED) {
+    const record = await getStudySummaryRecord(studyId);
+    if (!record) return null;
+
+    const protocolVersions = await getProtocolVersionSummaries(studyId);
+    const latestExport = await getExportJobRecord(
+      record.latest_export_job_id ?? "",
+    );
+    return {
+      ...record,
+      latest_export_download_url: latestExport?.download_url ?? null,
+      latest_protocol_version: protocolVersions[0]?.version ?? null,
+    };
+  }
+
+  return buildFileStudySummary(studyId);
 }
 
 async function persistState(): Promise<void> {
@@ -191,6 +337,7 @@ function writeJson(
 ) {
   const body = JSON.stringify(payload);
   response.writeHead(statusCode, {
+    ...CORS_HEADERS,
     "Content-Type": "application/json; charset=utf-8",
     "Content-Length": Buffer.byteLength(body),
   });
@@ -410,6 +557,250 @@ async function seedDemoProtocol() {
   await persistState();
 }
 
+async function buildFileExportDataset(
+  studyId: string,
+): Promise<ExportDataset | null> {
+  const protocol = await getStudyProtocol(studyId);
+  const studyParticipants = [...participants.values()].filter(
+    (participant) => participant.study_id === studyId,
+  );
+  if (!protocol && studyParticipants.length === 0) {
+    return null;
+  }
+
+  const participantIds = new Set(
+    studyParticipants.map((participant) => participant.participant_id),
+  );
+  return {
+    study_id: studyId,
+    exported_at: new Date().toISOString(),
+    protocol_versions: protocol ? [protocol] : [],
+    participants: studyParticipants.map(
+      ({ token: _token, ...participant }) => participant,
+    ),
+    sessions: [...sessions.values()].filter(
+      (session) =>
+        session.study_id === studyId ||
+        participantIds.has(session.participant_id),
+    ),
+    prompt_logs: [...promptLogs.values()].filter(
+      (entry) =>
+        entry.study_id === studyId ||
+        (typeof entry.participant_id === "string" &&
+          participantIds.has(entry.participant_id)),
+    ),
+    context_snapshots: [...contextSnapshots.values()].filter(
+      (snapshot) =>
+        snapshot.study_id === studyId ||
+        (typeof snapshot.participant_id === "string" &&
+          participantIds.has(snapshot.participant_id)),
+    ),
+    survey_responses: [...surveyResponses.values()].filter(
+      (row) =>
+        row.study_id === studyId ||
+        (typeof row.participant_id === "string" &&
+          participantIds.has(row.participant_id)),
+    ),
+  };
+}
+
+async function getExportDataset(
+  studyId: string,
+): Promise<ExportDataset | null> {
+  if (DATABASE_ENABLED) {
+    return getStudyExportDataset(studyId);
+  }
+  return buildFileExportDataset(studyId);
+}
+
+async function getHealthPayload(): Promise<HealthPayload> {
+  if (DATABASE_ENABLED) {
+    const counts = await getBackendCounts();
+    return {
+      ok: true,
+      service: "ema-server",
+      timestamp: new Date().toISOString(),
+      storage_mode: "database",
+      counts: counts ?? {
+        participants: 0,
+        protocol_versions: 0,
+        sessions: 0,
+        prompt_logs: 0,
+        context_snapshots: 0,
+        survey_responses: 0,
+        export_jobs: 0,
+      },
+    };
+  }
+
+  return {
+    ok: true,
+    service: "ema-server",
+    timestamp: new Date().toISOString(),
+    storage_mode: "file",
+    counts: {
+      participants: participants.size,
+      protocol_versions: studyProtocols.size,
+      sessions: sessions.size,
+      prompt_logs: promptLogs.size,
+      context_snapshots: contextSnapshots.size,
+      survey_responses: surveyResponses.size,
+      export_jobs: exportJobs.size,
+    },
+  };
+}
+
+async function getProtocolVersionSummaries(
+  studyId: string,
+): Promise<ProtocolVersionSummary[]> {
+  if (DATABASE_ENABLED) {
+    return listStudyProtocolVersions(studyId);
+  }
+
+  const protocol = await getStudyProtocol(studyId);
+  return protocol
+    ? [{ version: protocol.version, updated_at: protocol.updated_at }]
+    : [];
+}
+
+function escapeCsvCell(value: unknown): string {
+  const text =
+    typeof value === "string"
+      ? value
+      : value === undefined
+        ? ""
+        : JSON.stringify(value);
+  const escaped = text.replace(/"/g, '""');
+  return `"${escaped}"`;
+}
+
+function toJsonExport(dataset: ExportDataset): string {
+  return `${JSON.stringify(dataset, null, 2)}\n`;
+}
+
+function toCsvExport(dataset: ExportDataset): string {
+  const rows: string[] = [
+    [
+      "entity_type",
+      "study_id",
+      "participant_id",
+      "protocol_version",
+      "record_id",
+      "record_timestamp",
+      "payload_json",
+    ]
+      .map(escapeCsvCell)
+      .join(","),
+  ];
+
+  for (const protocol of dataset.protocol_versions) {
+    rows.push(
+      [
+        "protocol_version",
+        dataset.study_id,
+        "",
+        protocol.version,
+        `${dataset.study_id}:v${protocol.version}`,
+        protocol.updated_at,
+        protocol,
+      ]
+        .map(escapeCsvCell)
+        .join(","),
+    );
+  }
+  for (const participant of dataset.participants) {
+    rows.push(
+      [
+        "participant",
+        dataset.study_id,
+        participant.participant_id,
+        "",
+        participant.participant_id,
+        participant.enrolled_at,
+        participant,
+      ]
+        .map(escapeCsvCell)
+        .join(","),
+    );
+  }
+  for (const session of dataset.sessions) {
+    rows.push(
+      [
+        "session",
+        session.study_id,
+        session.participant_id,
+        session.protocol_version ?? "",
+        session.session_uuid,
+        session.ended_at ?? session.started_at ?? "",
+        session,
+      ]
+        .map(escapeCsvCell)
+        .join(","),
+    );
+  }
+  for (const promptLog of dataset.prompt_logs) {
+    rows.push(
+      [
+        "prompt_log",
+        promptLog.study_id ?? dataset.study_id,
+        promptLog.participant_id ?? "",
+        typeof promptLog.protocol_version === "number"
+          ? promptLog.protocol_version
+          : "",
+        promptLog.prompt_id,
+        (typeof promptLog.assessment_ended_at === "string"
+          ? promptLog.assessment_ended_at
+          : typeof promptLog.opened_at === "string"
+            ? promptLog.opened_at
+            : typeof promptLog.sent_at === "string"
+              ? promptLog.sent_at
+              : "") ?? "",
+        promptLog,
+      ]
+        .map(escapeCsvCell)
+        .join(","),
+    );
+  }
+  for (const snapshot of dataset.context_snapshots) {
+    rows.push(
+      [
+        "context_snapshot",
+        snapshot.study_id ?? dataset.study_id,
+        snapshot.participant_id ?? "",
+        typeof snapshot.protocol_version === "number"
+          ? snapshot.protocol_version
+          : "",
+        snapshot.snapshot_id,
+        typeof snapshot.captured_at === "string" ? snapshot.captured_at : "",
+        snapshot,
+      ]
+        .map(escapeCsvCell)
+        .join(","),
+    );
+  }
+  for (const surveyResponse of dataset.survey_responses) {
+    rows.push(
+      [
+        "survey_response",
+        surveyResponse.study_id ?? dataset.study_id,
+        surveyResponse.participant_id ?? "",
+        typeof surveyResponse.protocol_version === "number"
+          ? surveyResponse.protocol_version
+          : "",
+        surveyResponse.record_id,
+        typeof surveyResponse.captured_at === "string"
+          ? surveyResponse.captured_at
+          : "",
+        surveyResponse,
+      ]
+        .map(escapeCsvCell)
+        .join(","),
+    );
+  }
+
+  return `${rows.join("\n")}\n`;
+}
+
 const routes: Array<{
   method: string;
   pattern: string;
@@ -418,12 +809,8 @@ const routes: Array<{
   {
     method: "GET",
     pattern: "/health",
-    handler: ({ response }) => {
-      writeJson(response, 200, {
-        ok: true,
-        service: "ema-server",
-        timestamp: new Date().toISOString(),
-      });
+    handler: async ({ response }) => {
+      writeJson(response, 200, await getHealthPayload());
     },
   },
   {
@@ -560,6 +947,39 @@ const routes: Array<{
       }
 
       writeJson(response, 200, stored.protocol);
+    },
+  },
+  {
+    method: "GET",
+    pattern: "/studies/:study_id/protocol-versions",
+    handler: async ({ request, response, params }) => {
+      if (!hasApiKey(request.headers)) {
+        writeJson(response, 401, { error: "API key required" });
+        return;
+      }
+
+      writeJson(response, 200, {
+        study_id: params.study_id,
+        versions: await getProtocolVersionSummaries(params.study_id),
+      });
+    },
+  },
+  {
+    method: "GET",
+    pattern: "/studies/:study_id/summary",
+    handler: async ({ request, response, params }) => {
+      if (!hasApiKey(request.headers)) {
+        writeJson(response, 401, { error: "API key required" });
+        return;
+      }
+
+      const summary = await getStudySummary(params.study_id);
+      if (!summary) {
+        writeJson(response, 404, { error: "Study not found" });
+        return;
+      }
+
+      writeJson(response, 200, summary);
     },
   },
   {
@@ -890,6 +1310,11 @@ const routes: Array<{
 
       const payload = body as { format?: unknown } | null;
       const format = payload?.format === "csv" ? "csv" : "json";
+      const dataset = await getExportDataset(params.study_id);
+      if (!dataset) {
+        writeJson(response, 404, { error: "Study data not found" });
+        return;
+      }
       const jobId = randomUUID();
       if (DATABASE_ENABLED) {
         await createExportJobRecord({
@@ -915,7 +1340,7 @@ const routes: Array<{
         if (DATABASE_ENABLED) {
           void updateExportJobRecord(jobId, {
             status: "ready",
-            download_url: `/exports/${jobId}.zip`,
+            download_url: `${API_PREFIX}/exports/${jobId}`,
           });
           return;
         }
@@ -923,7 +1348,7 @@ const routes: Array<{
         const job = exportJobs.get(jobId);
         if (!job) return;
         job.status = "ready";
-        job.download_url = `/exports/${jobId}.zip`;
+        job.download_url = `${API_PREFIX}/exports/${jobId}`;
         job.updated_at = new Date().toISOString();
         void persistState();
       });
@@ -951,7 +1376,49 @@ const routes: Array<{
       writeJson(response, 200, {
         status: job.status,
         download_url: job.download_url,
+        error: job.error,
       });
+    },
+  },
+  {
+    method: "GET",
+    pattern: "/exports/:job_id",
+    handler: async ({ request, response, params }) => {
+      if (!hasApiKey(request.headers)) {
+        writeJson(response, 401, { error: "API key required" });
+        return;
+      }
+
+      const job = DATABASE_ENABLED
+        ? await getExportJobRecord(params.job_id)
+        : (exportJobs.get(params.job_id) ?? null);
+      if (!job) {
+        writeJson(response, 404, { error: "Export job not found" });
+        return;
+      }
+      if (job.status !== "ready") {
+        writeJson(response, 409, { error: "Export job is not ready" });
+        return;
+      }
+
+      const dataset = await getExportDataset(job.study_id);
+      if (!dataset) {
+        writeJson(response, 404, { error: "Study data not found" });
+        return;
+      }
+
+      const body =
+        job.format === "csv" ? toCsvExport(dataset) : toJsonExport(dataset);
+      const extension = job.format === "csv" ? "csv" : "json";
+      response.writeHead(200, {
+        "Content-Type":
+          job.format === "csv"
+            ? "text/csv; charset=utf-8"
+            : "application/json; charset=utf-8",
+        "Content-Disposition": `attachment; filename="${job.study_id}-export-${params.job_id}.${extension}"`,
+        "Content-Length": Buffer.byteLength(body),
+      });
+      response.end(body);
     },
   },
 ];
@@ -960,6 +1427,16 @@ async function handleRequest(
   request: IncomingMessage,
   response: ServerResponse,
 ) {
+  for (const [key, value] of Object.entries(CORS_HEADERS)) {
+    response.setHeader(key, value);
+  }
+
+  if (request.method === "OPTIONS") {
+    response.writeHead(204);
+    response.end();
+    return;
+  }
+
   const url = new URL(request.url ?? "/", "http://localhost");
   const pathname = url.pathname.startsWith(API_PREFIX)
     ? url.pathname.slice(API_PREFIX.length) || "/"

@@ -257,6 +257,80 @@ textarea {
   border: 1px solid var(--line);
 }
 
+.goal-list {
+  display: grid;
+  gap: 12px;
+}
+
+.goal-item {
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: #fff;
+  border: 1px solid var(--line);
+}
+
+.progress-summary {
+  display: grid;
+  gap: 10px;
+  margin-bottom: 14px;
+}
+
+.progress-summary strong {
+  color: var(--accent);
+}
+
+.progress-track {
+  width: 100%;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(31, 111, 82, 0.12);
+  overflow: hidden;
+}
+
+.progress-track.small {
+  height: 8px;
+  margin-top: 10px;
+}
+
+.progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--accent-2));
+}
+
+.progress-fill.next {
+  background: linear-gradient(90deg, #9f5226, #d9935f);
+}
+
+.progress-fill.done {
+  background: linear-gradient(90deg, var(--accent), #4ea57f);
+}
+
+.progress-fill.active {
+  background: linear-gradient(90deg, var(--accent-2), #e39a6b);
+}
+
+.goal-percent {
+  margin: 8px 0 0;
+}
+
+.goal-chip.done {
+  color: #fff;
+  background: var(--accent);
+  border-color: var(--accent);
+}
+
+.goal-chip.active {
+  color: #fff;
+  background: var(--accent-2);
+  border-color: var(--accent-2);
+}
+
+.goal-chip.next {
+  color: var(--ink);
+  background: var(--panel);
+}
+
 @media (max-width: 980px) {
   .layout,
   .split-grid,

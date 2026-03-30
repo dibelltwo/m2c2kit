@@ -3,7 +3,16 @@
 Current backend runtime:
 
 - file-backed uploads and prototype state in `../data/state.json`
-- optional Postgres persistence via Prisma for studies, protocol versions, participants, and export jobs
+- optional Postgres persistence via Prisma for the full current backend slice:
+  - studies
+  - protocol versions
+  - participants
+  - export jobs
+  - sessions
+  - prompt logs
+  - context snapshots
+  - survey responses
+  - sync-status/compliance reads
 
 Next backend target:
 
@@ -18,9 +27,9 @@ Scaffolded files:
 
 Suggested next migration order:
 
-1. install Prisma dependencies
-2. start Postgres locally
-3. run Prisma migrate/generate
-4. move `Study` and `Participant` reads/writes to Prisma
-5. move `StudyProtocolVersion` and `ExportJob`
-6. move uploads, sync state, and compliance aggregation
+1. start Postgres locally
+2. copy `.env.example` to `.env`
+3. run `npm run prisma:generate`
+4. run `npm run prisma:migrate:deploy`
+5. run `npm run build`
+6. optionally run `npm run db:import-state`

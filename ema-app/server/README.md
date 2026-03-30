@@ -24,10 +24,24 @@ Default credentials:
 - default prototype mode:
   - uploads and local prototype state persist to `ema-app/server/data/state.json`
 - optional database mode:
+  - create `.env` from `.env.example`
   - set `DATABASE_URL`
-  - run Prisma generate/migrate
+  - run `npm run prisma:generate`
+  - run `npm run prisma:migrate:deploy`
+  - optionally run `npm run db:import-state` after `npm run build` to move existing `data/state.json` records into Postgres
   - studies, protocol versions, participants, and export jobs are stored in Postgres
-  - uploads still use the JSON-backed prototype store for now
+  - sessions, prompt logs, context snapshots, survey responses, sync-status, and compliance also switch to Postgres
+
+## Local DB Validation Mode
+
+If you do not have a system Postgres install, there is now a local validation path:
+
+- `npm run db:pglite`
+  - starts a temporary Postgres-compatible wire server backed by PGlite on port `5432`
+- `DATABASE_URL='postgresql://postgres@localhost:5432/postgres' npm run prisma:migrate:deploy`
+- `DATABASE_URL='postgresql://postgres@localhost:5432/postgres' npm run db:import-state`
+- `DATABASE_URL='./data/pglite' PGLITE_DATA_DIR='./data/pglite' PORT=3300 node dist/index.js`
+  - runs the EMA server in DB-backed mode using the same migrated/imported PGlite data directory
 
 ## Included Routes
 
@@ -36,6 +50,7 @@ Default credentials:
 - `GET /v1/participants`
 - `GET /v1/participants/:participant_id/protocol`
 - `GET /v1/studies/:study_id/protocol`
+- `GET /v1/studies/:study_id/protocol-versions`
 - `PUT /v1/studies/:study_id/protocol`
 - `POST /v1/sessions`
 - `POST /v1/prompt-logs`
@@ -45,11 +60,11 @@ Default credentials:
 - `GET /v1/participants/:participant_id/compliance`
 - `POST /v1/studies/:study_id/export`
 - `GET /v1/export-jobs/:job_id`
+- `GET /v1/exports/:job_id`
 
 This scaffold is intentionally temporary:
 
-- uploads remain JSON-file-backed at `ema-app/server/data/state.json`
-- only the first persistence slice is database-backed so far
+- file mode still exists for fast local prototyping
 - auth is minimal
 - export jobs are placeholders
 - no production hardening is included yet

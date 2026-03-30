@@ -26,8 +26,30 @@ export interface ComplianceSummary {
 
 export interface ExportJob {
   job_id: string;
-  status: "queued" | "running" | "ready" | "failed";
+  status: "pending" | "running" | "ready" | "failed";
   download_url?: string;
+  error?: string;
+}
+
+export interface ProtocolVersionSummary {
+  version: number;
+  updated_at: string;
+}
+
+export interface BackendHealth {
+  ok: boolean;
+  service: string;
+  timestamp: string;
+  storage_mode?: "database" | "file";
+  counts?: {
+    participants: number;
+    protocol_versions: number;
+    sessions: number;
+    prompt_logs: number;
+    context_snapshots: number;
+    survey_responses: number;
+    export_jobs: number;
+  };
 }
 
 const API_BASE = window.__DASHBOARD_API_BASE__ ?? "http://localhost:3000/v1";
@@ -106,6 +128,27 @@ export const dashboardApi = {
     );
   },
 
+  async getHealth(): Promise<BackendHealth> {
+    if (DEMO_MODE) {
+      return {
+        ok: true,
+        service: "ema-server-demo",
+        timestamp: "2026-03-22T12:00:00Z",
+        storage_mode: "file",
+        counts: {
+          participants: 2,
+          protocol_versions: 4,
+          sessions: 12,
+          prompt_logs: 24,
+          context_snapshots: 3,
+          survey_responses: 40,
+          export_jobs: 1,
+        },
+      };
+    }
+    return apiRequest<BackendHealth>("/health");
+  },
+
   async getCompliance(participantId: string): Promise<ComplianceSummary> {
     if (DEMO_MODE) {
       return (
@@ -143,6 +186,19 @@ export const dashboardApi = {
       method: "PUT",
       body: JSON.stringify(protocol),
     });
+  },
+
+  async listProtocolVersions(
+    studyId: string,
+  ): Promise<ProtocolVersionSummary[]> {
+    if (DEMO_MODE) {
+      return [{ version: 4, updated_at: "2026-03-20T17:00:00Z" }];
+    }
+    const response = await apiRequest<{
+      study_id: string;
+      versions: ProtocolVersionSummary[];
+    }>(`/studies/${studyId}/protocol-versions`);
+    return response.versions;
   },
 
   async startExport(

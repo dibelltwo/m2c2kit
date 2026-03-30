@@ -105,5 +105,24 @@
       "scoring": []
     }
   ],
-  "exportJobs": []
+  "exportJobs": [
+    {
+      "job_id": "f9d6acae-5bf4-45eb-80ec-f89933730e25",
+      "study_id": "dev-study",
+      "format": "json",
+      "status": "ready",
+      "created_at": "2026-03-22T20:03:00.236Z",
+      "updated_at": "2026-03-22T20:03:00.240Z",
+      "download_url": "/v1/exports/f9d6acae-5bf4-45eb-80ec-f89933730e25"
+    },
+    {
+      "job_id": "69b4ab1f-cac9-4dff-b1d9-6ea8344967b9",
+      "study_id": "dev-study",
+      "format": "json",
+      "status": "ready",
+      "created_at": "2026-03-22T23:17:24.892Z",
+      "updated_at": "2026-03-22T23:17:24.895Z",
+      "download_url": "/v1/exports/69b4ab1f-cac9-4dff-b1d9-6ea8344967b9"
+    }
+  ]
 }

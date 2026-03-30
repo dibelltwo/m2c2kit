@@ -4,7 +4,8 @@
   "private": true,
   "scripts": {
     "serve": "rollup -c --configServe --configPort 3010",
-    "build": "rimraf dist .rollup.cache && rollup -c --configProd"
+    "build": "rimraf dist .rollup.cache && rollup -c --configProd",
+    "local": "npm run build && python3 -m http.server 4173"
   },
   "devDependencies": {
     "@rollup/plugin-node-resolve": "16.0.3",

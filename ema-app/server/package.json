@@ -6,15 +6,22 @@
   "scripts": {
     "prisma:generate": "prisma generate",
     "prisma:migrate": "prisma migrate dev",
+    "prisma:migrate:deploy": "prisma migrate deploy",
+    "db:pglite": "node scripts/pglite-server.mjs",
     "build": "tsc -p tsconfig.json",
+    "local": "npm run build && PORT=3100 node dist/index.js",
     "dev": "node --watch dist/index.js",
     "start": "node dist/index.js",
+    "db:import-state": "node dist/db/import-state.js",
     "clean": "rm -rf dist"
   },
   "dependencies": {
-    "@prisma/client": "6.7.0"
+    "@prisma/client": "6.7.0",
+    "pglite-prisma-adapter": "^0.5.0"
   },
   "devDependencies": {
+    "@electric-sql/pglite": "^0.4.1",
+    "pglite-server": "^0.1.5",
     "prisma": "6.7.0"
   },
   "engines": {

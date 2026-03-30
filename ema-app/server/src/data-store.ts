@@ -1,3 +1,4 @@
+import "./env.js";
 import { Prisma } from "@prisma/client";
 import { prisma } from "./db/prisma.js";
 
@@ -59,8 +60,50 @@ export type ExportJob = {
   format: "csv" | "json";
   status: "pending" | "running" | "ready" | "failed";
   download_url?: string;
+  error?: string;
   created_at: string;
   updated_at: string;
+};
+
+export type ExportDataset = {
+  study_id: string;
+  exported_at: string;
+  protocol_versions: StoredProtocol[];
+  participants: Array<Omit<ParticipantRecord, "token">>;
+  sessions: SessionUpload[];
+  prompt_logs: PromptLogEntry[];
+  context_snapshots: ContextSnapshot[];
+  survey_responses: SurveyResponse[];
+};
+
+export type ProtocolVersionSummary = {
+  version: number;
+  updated_at: string;
+};
+
+export type BackendCounts = {
+  participants: number;
+  protocol_versions: number;
+  sessions: number;
+  prompt_logs: number;
+  context_snapshots: number;
+  survey_responses: number;
+  export_jobs: number;
+};
+
+export type StudySummary = {
+  study_id: string;
+  participant_count: number;
+  session_count: number;
+  prompt_log_count: number;
+  survey_response_count: number;
+  context_snapshot_count: number;
+  protocol_version_count: number;
+  export_job_count: number;
+  latest_protocol_updated_at: string | null;
+  latest_session_at: string | null;
+  latest_export_status: string | null;
+  latest_export_job_id: string | null;
 };
 
 const DATABASE_ENABLED = Boolean(process.env.DATABASE_URL);
@@ -101,6 +144,7 @@ function toExportJob(row: {
   format: string;
   status: string;
   download_url: string | null;
+  error: string | null;
   created_at: Date;
   updated_at: Date;
 }): ExportJob {
@@ -115,6 +159,7 @@ function toExportJob(row: {
         ? row.status
         : "pending",
     download_url: row.download_url ?? undefined,
+    error: row.error ?? undefined,
     created_at: row.created_at.toISOString(),
     updated_at: row.updated_at.toISOString(),
   };
@@ -197,6 +242,79 @@ function toPromptLogEntry(row: {
     quit_early: row.quit_early,
     n_trials_completed: row.n_trials_completed ?? undefined,
     context_snapshot_id: row.context_snapshot_id ?? undefined,
+  };
+}
+
+function toContextSnapshot(row: {
+  snapshot_id: string;
+  prompt_id: string | null;
+  participant_id: string;
+  study_id: string | null;
+  protocol_version: number | null;
+  captured_at: Date | null;
+  latitude: number | null;
+  longitude: number | null;
+  gps_accuracy_meters: number | null;
+  battery_level: number | null;
+  is_charging: boolean | null;
+  network_type: string | null;
+  payload_json: Prisma.JsonValue | null;
+}): ContextSnapshot {
+  return {
+    snapshot_id: row.snapshot_id,
+    prompt_id: row.prompt_id ?? undefined,
+    participant_id: row.participant_id,
+    study_id: row.study_id ?? undefined,
+    protocol_version: row.protocol_version ?? undefined,
+    captured_at: row.captured_at?.toISOString(),
+    latitude: row.latitude ?? undefined,
+    longitude: row.longitude ?? undefined,
+    gps_accuracy_meters: row.gps_accuracy_meters ?? undefined,
+    battery_level: row.battery_level ?? undefined,
+    is_charging: row.is_charging ?? undefined,
+    network_type: row.network_type ?? undefined,
+    payload_json: row.payload_json ?? undefined,
+  };
+}
+
+function toSurveyResponse(row: {
+  record_id: string;
+  session_uuid: string | null;
+  prompt_id: string | null;
+  participant_id: string;
+  study_id: string | null;
+  protocol_version: number | null;
+  survey_id: string;
+  survey_version: number | null;
+  item_id: string;
+  response_status: string;
+  response_value: Prisma.JsonValue | null;
+  captured_at: Date | null;
+}): SurveyResponse {
+  return {
+    record_id: row.record_id,
+    session_uuid: row.session_uuid ?? undefined,
+    prompt_id: row.prompt_id ?? undefined,
+    participant_id: row.participant_id,
+    study_id: row.study_id ?? undefined,
+    protocol_version: row.protocol_version ?? undefined,
+    survey_id: row.survey_id,
+    survey_version: row.survey_version ?? undefined,
+    item_id: row.item_id,
+    response_status: row.response_status,
+    response_value: row.response_value ?? undefined,
+    captured_at: row.captured_at?.toISOString(),
+  };
+}
+
+function toExportParticipant(
+  participant: ParticipantRecord,
+): Omit<ParticipantRecord, "token"> {
+  return {
+    participant_id: participant.participant_id,
+    study_id: participant.study_id,
+    enrolled_at: participant.enrolled_at,
+    device_id: participant.device_id,
   };
 }
 
@@ -367,6 +485,184 @@ export async function getExportJobRecord(
     where: { job_id: jobId },
   });
   return row ? toExportJob(row) : null;
+}
+
+export async function getStudyExportDataset(
+  studyId: string,
+): Promise<ExportDataset | null> {
+  if (!DATABASE_ENABLED) {
+    return null;
+  }
+
+  const study = await prisma.study.findUnique({
+    where: { study_id: studyId },
+    select: { study_id: true },
+  });
+  if (!study) {
+    return null;
+  }
+
+  const [
+    protocolVersions,
+    participants,
+    sessions,
+    promptLogs,
+    contextSnapshots,
+    surveyResponses,
+  ] = await Promise.all([
+    prisma.studyProtocolVersion.findMany({
+      where: { study_id: studyId },
+      orderBy: [{ version: "asc" }],
+    }),
+    prisma.participant.findMany({
+      where: { study_id: studyId },
+      orderBy: [{ enrolled_at: "asc" }],
+    }),
+    prisma.sessionUpload.findMany({
+      where: { study_id: studyId },
+      orderBy: [{ uploaded_at: "asc" }],
+    }),
+    prisma.promptLog.findMany({
+      where: { study_id: studyId },
+      orderBy: [{ uploaded_at: "asc" }],
+    }),
+    prisma.contextSnapshot.findMany({
+      where: { study_id: studyId },
+      orderBy: [{ uploaded_at: "asc" }],
+    }),
+    prisma.surveyItemResponse.findMany({
+      where: { study_id: studyId },
+      orderBy: [{ uploaded_at: "asc" }],
+    }),
+  ]);
+
+  return {
+    study_id: studyId,
+    exported_at: new Date().toISOString(),
+    protocol_versions: protocolVersions.map(toStoredProtocol),
+    participants: participants.map((participant) =>
+      toExportParticipant(toParticipantRecord(participant)),
+    ),
+    sessions: sessions.map(toSessionUpload),
+    prompt_logs: promptLogs.map(toPromptLogEntry),
+    context_snapshots: contextSnapshots.map(toContextSnapshot),
+    survey_responses: surveyResponses.map(toSurveyResponse),
+  };
+}
+
+export async function listStudyProtocolVersions(
+  studyId: string,
+): Promise<ProtocolVersionSummary[]> {
+  if (!DATABASE_ENABLED) {
+    return [];
+  }
+
+  const rows = await prisma.studyProtocolVersion.findMany({
+    where: { study_id: studyId },
+    orderBy: [{ version: "desc" }],
+    select: { version: true, updated_at: true },
+  });
+  return rows.map((row) => ({
+    version: row.version,
+    updated_at: row.updated_at.toISOString(),
+  }));
+}
+
+export async function getBackendCounts(): Promise<BackendCounts | null> {
+  if (!DATABASE_ENABLED) {
+    return null;
+  }
+
+  const [
+    participants,
+    protocol_versions,
+    sessions,
+    prompt_logs,
+    context_snapshots,
+    survey_responses,
+    export_jobs,
+  ] = await Promise.all([
+    prisma.participant.count(),
+    prisma.studyProtocolVersion.count(),
+    prisma.sessionUpload.count(),
+    prisma.promptLog.count(),
+    prisma.contextSnapshot.count(),
+    prisma.surveyItemResponse.count(),
+    prisma.exportJob.count(),
+  ]);
+
+  return {
+    participants,
+    protocol_versions,
+    sessions,
+    prompt_logs,
+    context_snapshots,
+    survey_responses,
+    export_jobs,
+  };
+}
+
+export async function getStudySummaryRecord(
+  studyId: string,
+): Promise<StudySummary | null> {
+  if (!DATABASE_ENABLED) {
+    return null;
+  }
+
+  const [
+    study,
+    participants,
+    sessions,
+    promptLogs,
+    contextSnapshots,
+    surveyResponses,
+    protocolVersions,
+    exportJobs,
+  ] = await Promise.all([
+    prisma.study.findUnique({
+      where: { study_id: studyId },
+      select: { study_id: true },
+    }),
+    prisma.participant.count({ where: { study_id: studyId } }),
+    prisma.sessionUpload.findMany({
+      where: { study_id: studyId },
+      orderBy: [{ uploaded_at: "desc" }],
+      select: { uploaded_at: true },
+    }),
+    prisma.promptLog.count({ where: { study_id: studyId } }),
+    prisma.contextSnapshot.count({ where: { study_id: studyId } }),
+    prisma.surveyItemResponse.count({ where: { study_id: studyId } }),
+    prisma.studyProtocolVersion.findMany({
+      where: { study_id: studyId },
+      orderBy: [{ updated_at: "desc" }],
+      select: { updated_at: true },
+    }),
+    prisma.exportJob.findMany({
+      where: { study_id: studyId },
+      orderBy: [{ updated_at: "desc" }],
+      select: { job_id: true, status: true },
+    }),
+  ]);
+
+  if (!study) {
+    return null;
+  }
+
+  return {
+    study_id: studyId,
+    participant_count: participants,
+    session_count: sessions.length,
+    prompt_log_count: promptLogs,
+    survey_response_count: surveyResponses,
+    context_snapshot_count: contextSnapshots,
+    protocol_version_count: protocolVersions.length,
+    export_job_count: exportJobs.length,
+    latest_protocol_updated_at:
+      protocolVersions[0]?.updated_at.toISOString() ?? null,
+    latest_session_at: sessions[0]?.uploaded_at.toISOString() ?? null,
+    latest_export_status: exportJobs[0]?.status ?? null,
+    latest_export_job_id: exportJobs[0]?.job_id ?? null,
+  };
 }
 
 export async function upsertSessionUploadRecord(
